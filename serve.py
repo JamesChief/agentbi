@@ -95,6 +95,22 @@ def do_check(url):
     return res, False
 
 
+def _prev_snapshot(cur_date):
+    """上一次（不同日期的）每日快照，用于榜单上给出环比。没有就返回 None。"""
+    d = os.path.join(os.path.dirname(BATCH), "history")
+    if not os.path.isdir(d):
+        return None
+    files = sorted(f for f in os.listdir(d) if f.startswith("batch-") and f.endswith(".json"))
+    for f in reversed(files):
+        if cur_date in f:                      # 今天这次不算"上一次"
+            continue
+        try:
+            return f[len("batch-"):-len(".json")], json.load(open(os.path.join(d, f)))
+        except Exception:
+            return None
+    return None
+
+
 def render_leaderboard():
     if not os.path.exists(BATCH):
         return "<p>还没有榜单数据</p>"
@@ -140,6 +156,23 @@ def render_leaderboard():
              "（多个店铺模板逐字节相同）——它是平台分界线，不是站主努力程度的信号。</li>")
     L.append("<li>评分是<b>启发式</b>的：不做 JS 渲染，也不会真的通过 UCP 下单，"
              "只验证 manifest 是否存在及其版本。</li>")
+
+    # 环比：数字每天都在变，不解释清楚，引用方拿到的前后不一致会直接质疑数据
+    prev = _prev_snapshot(date)
+    if prev:
+        pdate, p = prev
+        pr = [r for r in p["rows"] if not r.get("error") and r.get("home_status") == 200]
+        pu = sum(1 for r in pr if r.get("ucp"))
+        cu = sum(1 for r in reach if r.get("ucp"))
+
+        def delta(a, b):
+            d = b - a
+            return f"{b}（{'+' if d >= 0 else '−'}{abs(d)}）"
+
+        L.append(f"<li>较上一次快照（{pdate}）：可评估 {delta(len(pr), len(reach))}，"
+                 f"部署 UCP {delta(pu, cu)}。<b>可评估数会随时间波动</b>——同一批站点在不同日期"
+                 f"相差十几个是常态（对方 WAF 策略与我们的出口 IP 信誉都在变），"
+                 f"所以引用本站数字时请带上快照日期。</li>")
     L.append("</ul>")
 
     L.append(f"<h2>明细（可评估 {len(reach)} / 扫描 {len(rows)}）</h2>")
