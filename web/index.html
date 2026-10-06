@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentBI — 你的网站对 AI agent 有多友好</title>
+<meta name="description" content="输入网址，看你的网站能被 AI agent 找到、读懂、下单吗。检测 UCP 部署、产品结构化数据、llms.txt 与多 UA 抓取差异。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AgentBI">
+<meta property="og:title" content="AgentBI — 你的网站对 AI agent 有多友好">
+<meta property="og:description" content="Shopify 店铺 86% 已支持 agent 商务，WooCommerce 0%。你的站呢？输入网址，15 秒出报告。">
+<meta property="og:url" content="https://agentbi.tech/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="AgentBI — 你的网站对 AI agent 有多友好">
+<meta name="twitter:description" content="Shopify 店铺 86% 已支持 agent 商务，WooCommerce 0%。你的站呢？输入网址，15 秒出报告。">
+<link rel="canonical" href="https://agentbi.tech/">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<h1>AgentBI</h1>
+<p class="sub">输入网址，看你的网站能被 AI agent 找到、读懂、下单吗。</p>
+
+<form id="f">
+  <input id="u" type="text" placeholder="https://your-store.com" autocomplete="off" required>
+  <button type="submit">检测</button>
+</form>
+<p class="sub"><a href="/leaderboard">查看榜单（225 家电商站实测）→</a></p>
+
+<div id="out"></div>
+
+<footer>
+  <p>检测项：agent 能否抓取 · 产品结构化数据 · UCP 部署与版本 · llms.txt · robots。
+     工具开源，数据可复现。</p>
+  <p><a href="/about">我们怎么抓站 / 如何让我们不抓你</a></p>
+</footer>
+
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function scoreClass(s){ return s>=80?'good':s>=50?'mid':'bad'; }
+
+function render(r){
+  if (r.error) return `<div class="err">✗ ${esc(r.error)}</div>`;
+  const d = r.detail || {};
+  const rows = ['fetch','structured','ucp','llms','robots']
+    .filter(k => d[k] !== undefined)
+    .map(k => `<tr><td>${esc(k)}</td><td>${esc(d[k])}</td></tr>`).join('');
+
+  let probe = '';
+  if (r.probe && !r.probe.skipped) {
+    if (r.probe.inconclusive) {
+      probe = `<p class="note">⚠ ${esc(r.probe.note || '')}</p>`;
+    } else if (r.probe.agents) {
+      const ag = Object.entries(r.probe.agents)
+        .map(([n,v]) => `<tr><td>${esc(n)}</td><td>${v.status}</td>`+
+             `<td>${v.readable?'可读':'—'}</td><td>${v.status==200?'✓':'✗ 被拦'}</td></tr>`).join('');
+      probe = `<h3>多 UA 探测</h3><table><tr><th>UA</th><th>状态</th><th>产品数据</th><th>结果</th></tr>${ag}</table>`;
+    }
+  }
+
+  let ucp = '';
+  if (r.ucp && r.ucp.present) {
+    const svc = Object.entries(r.ucp.services).map(([n,es]) =>
+      `<tr><td>${esc(n)}</td><td>${esc((es[0]||{}).version||'')}</td>`+
+      `<td>${esc((es[0]||{}).transport||'')}</td></tr>`).join('');
+    ucp = `<h3>UCP manifest</h3><p>当前版本 <code>${esc(r.ucp.version)}</code>，`+
+          `兼容历史版本 ${esc((r.ucp.supported_versions||[]).join(' / '))}</p>`+
+          `<table><tr><th>服务</th><th>版本</th><th>传输</th></tr>${svc}</table>`;
+  }
+
+  const fixes = (r.fixes||[]).map(f =>
+    `<li><span class="pri pri-${esc(f[1])}">${esc(f[1])}</span> <b>${esc(f[0])}</b><br>${esc(f[2])}</li>`).join('');
+
+  return `
+    <div class="score ${scoreClass(r.score)}">${r.score}<span>/100</span></div>
+    <p class="sub">检测对象 <code>${esc(r.checked_url)}</code>（${esc(r.checked_kind)}）</p>
+    <table class="dim">${rows}</table>
+    ${ucp}${probe}
+    ${fixes?`<h3>修复清单</h3><ul class="fix">${fixes}</ul>`:''}`;
+}
+
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const url = document.getElementById('u').value.trim();
+  const out = document.getElementById('out');
+  out.innerHTML = '<p class="note">检测中，约需 10–20 秒…</p>';
+  try {
+    const res = await fetch('/api/check?url=' + encodeURIComponent(url));
+    const j = await res.json();
+    if (j.error) { out.innerHTML = `<div class="err">✗ ${esc(j.error)}</div>`; return; }
+    out.innerHTML = render(j.result) + (j.cached ? '<p class="note">（来自缓存）</p>' : '');
+  } catch (err) {
+    out.innerHTML = `<div class="err">✗ 请求失败：${esc(err.message)}</div>`;
+  }
+});
+</script>
+</body>
+</html>

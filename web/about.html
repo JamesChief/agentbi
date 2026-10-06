@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>关于 AgentBI</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<h1>关于 AgentBI</h1>
+
+<h3>这是什么</h3>
+<p>AgentBI 检测一个网站对 AI agent 的友好程度：agent 能不能抓到页面、商品数据能不能被机器读懂
+（JSON-LD 的价格/库存）、有没有部署 UCP manifest、有没有 <code>llms.txt</code>。</p>
+
+<h3>我们怎么抓</h3>
+<ul>
+  <li><b>只在有人提交网址时才抓</b>，不是全網持续爬取。</li>
+  <li>用户代理标识为 <code>agentbi/0.1 (+https://agentbi.tech/about; agent-readiness scanner)</code>，不伪装成浏览器。</li>
+  <li>单次检测对同一站点发起约 10 个请求，耗时 15–20 秒。</li>
+  <li><b>同一域名 10 分钟内只真扫一次</b>，结果缓存 30 分钟。</li>
+  <li>结果公开在<a href="/leaderboard">榜单</a>里。</li>
+</ul>
+
+<h3>有一处例外，说明一下</h3>
+<p>检测里有一步是「多 UA 探测」：用几个真实 AI agent 的标识（GPTBot、ClaudeBot 等）
+和<b>一个真实浏览器的标识</b>各请求一次你的站点，对比返回是否不同——这是为了回答
+「你的站有没有把 AI agent 和正常访客区别对待」。<b>这一步必须是真实标识才测得出来</b>，
+所以这里是测量工具，不是匿名抓取。除这一步外，所有内容抓取都用上面那个诚实的用户代理。</p>
+
+<h3>不想被扫</h3>
+<p>目前尚未实现 robots.txt 自动遵从与退出清单——这是已知的待办。
+在此之前，请通过下面的邮箱联系我们，我们会人工把你的域名加入屏蔽列表。</p>
+<p>联系方式：<code>contact@agentbi.tech</code></p>
+
+<h3>数据</h3>
+<p>检测结果会被公开收录进榜单。榜单只统计返回 200 的站点；对探测器返回非 200 的站点
+（多为企业级 WAF 拦截）不会出现在榜单里，也不会被解读为「该站 agent 友好度低」。</p>
+
+<p class="sub"><a href="/">← 返回检测</a></p>
+</body>
+</html>

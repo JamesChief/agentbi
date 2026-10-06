@@ -1,0 +1,23 @@
+# /etc/caddy/Caddyfile
+# 一次检测约 15–20 秒，Caddy 默认无读超时，够用。
+
+# www 统一跳到主域（DNS 上 www 也指向本机，不接会变成无证书的死站）
+www.agentbi.tech {
+	redir https://agentbi.tech{uri} permanent
+}
+
+agentbi.tech {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+
+	log {
+		output file /var/log/caddy/agentbi.log
+	}
+
+	header {
+		# 极简加固
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+}

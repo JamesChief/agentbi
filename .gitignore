@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+# 未公开：运营部署信息（含真实 IP / 登录用户）与发布稿草稿
+部署清单.md
+post_draft.md
+posts_en.md

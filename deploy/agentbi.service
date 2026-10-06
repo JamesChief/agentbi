@@ -1,0 +1,31 @@
+# /etc/systemd/system/agentbi.service
+# 部署：把仓库放到 /opt/agentbi（含 web/、batch.json、serve.py、agentbi.py）
+
+[Unit]
+Description=agentbi web
+After=network.target
+
+[Service]
+Type=simple
+User=agentbi
+Group=agentbi
+WorkingDirectory=/opt/agentbi
+# 只监听本机，由 Caddy 对外
+ExecStart=/usr/bin/python3 -u serve.py --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+
+# 极简加固
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+# ProtectSystem=strict 下只有这些路径可写
+ReadWritePaths=/opt/agentbi
+
+[Install]
+WantedBy=multi-user.target
