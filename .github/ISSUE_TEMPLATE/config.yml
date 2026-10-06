@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 检测你的站
+    url: https://agentbi.tech
+    about: 输入网址出报告
+  - name: 榜单与方法说明
+    url: https://agentbi.tech/leaderboard
+    about: 225 家电商站实测数据，含局限说明
+  - name: 邮件联系
+    url: mailto:contact@agentbi.tech
+    about: 若 MX 已生效可用；否则请直接开 issue

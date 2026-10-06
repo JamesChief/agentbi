@@ -1,0 +1,34 @@
+name: 要求停止扫描
+description: 不希望你的站点被 AgentBI 检测 / 收录
+title: "[停止扫描] "
+labels: ["opt-out"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交后我会把域名加入屏蔽清单，抓取前会检查该清单。
+        **这是目前唯一生效的退出通道**——邮箱 `contact@agentbi.tech` 若仍在配置中，以这里为准。
+  - type: input
+    id: site
+    attributes:
+      label: 站点域名
+      description: 要屏蔽的域名（子域名请分别列出）
+      placeholder: example.com
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: 如何证明你拥有这个站点
+      description: |
+        任选一种：① 在该站首页加一条 noindex 注释或 meta 标签后告诉我；
+        ② 用该域名邮箱发信；③ 提供该站 DNS 的 TXT 记录（我会给出随机串）
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 屏蔽范围
+      options:
+        - label: 仅不再抓取（保留榜单里已有的历史结果）
+        - label: 抓取与榜单都移除

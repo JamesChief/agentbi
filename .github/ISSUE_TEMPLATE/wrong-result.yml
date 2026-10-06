@@ -1,0 +1,38 @@
+name: 检测结果有误
+description: AgentBI 把你的站判错了 —— 这里提交，公开更正
+title: "[结果有误] "
+labels: ["data-correction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢指出。评分是启发式的，错判一定存在。补一条说明：本工具**不做 JS 渲染**，
+        也不真的通过 UCP 下单——如果你的站是客户端渲染的，结构化数据那一项会被误判为缺失。
+  - type: input
+    id: site
+    attributes:
+      label: 站点
+      description: 被检测的网址
+      placeholder: https://example.com
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 哪一项不对
+      description: 哪一项判定错了，实际情况是什么
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: 证据
+      description: 例如 `curl -s https://你的站/.well-known/ucp` 的实际返回、页面源码里的 JSON-LD
+      render: shell
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 公开
+      options:
+        - label: 同意把这条更正公开在 issue 里（域名与检测结果会出现在榜单中）
+          required: false

@@ -36,7 +36,9 @@ _hits = {}
 _cache = {}
 _domain_at = {}
 _lock = threading.Lock()
-_sem = threading.Semaphore(4)          # 同时最多 4 个检测，避免把自己打挂
+_sem = threading.Semaphore(6)          # 同时最多 6 个检测（I/O 密集，2 vCPU 够）
+_sem_wait = 2                          # 等不到位置就明确报忙，别让用户干等着转圈
+_LB = {"mtime": 0.0, "html": ""}       # 榜单渲染结果缓存：每次请求渲染 225 行没必要
 
 URL_RE = re.compile(r"^https?://[^\s<>\"]{4,200}$", re.I)
 
@@ -81,8 +83,13 @@ def do_check(url):
         if stale:
             return stale, True
         return {"error": f"该站点刚被检测过，请 {DOMAIN_COOLDOWN // 60} 分钟后再试"}, False
-    with _sem:
+    if not _sem.acquire(timeout=_sem_wait):
+        # 宁可明确报忙，也不要让用户盯着转圈不知道发生了什么
+        return {"error": "现在排队检测的人较多，请 30 秒后重试"}, False
+    try:
         res = A.run(url, timeout=15, do_probe=True, discover=True)
+    finally:
+        _sem.release()
     with _lock:
         _cache[url] = (time.time(), res)
     return res, False
@@ -91,6 +98,9 @@ def do_check(url):
 def render_leaderboard():
     if not os.path.exists(BATCH):
         return "<p>还没有榜单数据</p>"
+    mt = os.path.getmtime(BATCH)
+    if _LB["html"] and _LB["mtime"] == mt:
+        return _LB["html"]                       # batch.json 没变就不重渲染
     data = json.load(open(BATCH))
     rows = data["rows"]
     ok = [r for r in rows if not r.get("error")]
@@ -142,7 +152,8 @@ def render_leaderboard():
     if un:
         L.append(f"<p class='note'>{len(un)} 个站点对探测器返回非 200（多为 WAF 拦截），"
                  f"不代表其 agent 友好度低，未计入榜单。</p>")
-    return "\n".join(L)
+    _LB["mtime"], _LB["html"] = mt, "\n".join(L)
+    return _LB["html"]
 
 
 class H(SimpleHTTPRequestHandler):
@@ -173,6 +184,12 @@ class H(SimpleHTTPRequestHandler):
         except IndexError:
             return parts[0]
 
+    def end_headers(self):
+        # 静态资源走浏览器缓存：HN 流量来的时候少打一次是一点
+        if urlparse(self.path).path.endswith((".css", ".js")):
+            self.send_header("Cache-Control", "public, max-age=3600")
+        super().end_headers()
+
     def _json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(code)
@@ -180,6 +197,39 @@ class H(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _leaderboard_body(self):
+        return (f"<html><head><meta charset='utf-8'><title>AgentBI 榜单</title>"
+                f"<meta name='description' content='225 家电商站的 AI agent 友好度实测："
+                f"Shopify 86% 部署 UCP，WooCommerce 0%。含方法与局限说明。'>"
+                f"<meta property='og:type' content='article'>"
+                f"<meta property='og:site_name' content='AgentBI'>"
+                f"<meta property='og:title' content='AgentBI 榜单 — 225 家电商站 agent 友好度实测'>"
+                f"<meta property='og:description' content='Shopify 86% 已部署 UCP，WooCommerce 0%。"
+                f"平台差异比站主努力更能决定你能不能被 shopping agent 找到。'>"
+                f"<meta property='og:url' content='https://agentbi.tech/leaderboard'>"
+                f"<meta name='twitter:card' content='summary'>"
+                f"<link rel='canonical' href='https://agentbi.tech/leaderboard'>"
+                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"<h1>AgentBI 榜单</h1><p><a href='/'>← 检测你的站</a></p>"
+                f"{render_leaderboard()}</body></html>").encode()
+
+    def _send_html(self, body, cache="public, max-age=300"):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+
+    def do_HEAD(self):
+        # 不覆盖 do_HEAD 的话，HEAD /leaderboard 会走静态文件逻辑返回 404，
+        # 社交卡片校验器和部分爬虫会被误导
+        u = urlparse(self.path)
+        if u.path in ("/leaderboard", "/leaderboard.html"):
+            return self._send_html(self._leaderboard_body())
+        if u.path in ("/about", "/about.html"):
+            self.path = "/about.html"
+        return super().do_HEAD()
 
     def do_GET(self):
         u = urlparse(self.path)
@@ -197,24 +247,8 @@ class H(SimpleHTTPRequestHandler):
             return self._json({"cached": cached, "result": res})
 
         if u.path in ("/leaderboard", "/leaderboard.html"):
-            body = (f"<html><head><meta charset='utf-8'><title>AgentBI 榜单</title>"
-                    f"<meta name='description' content='225 家电商站的 AI agent 友好度实测："
-                    f"Shopify 86% 部署 UCP，WooCommerce 0%。含方法与局限说明。'>"
-                    f"<meta property='og:type' content='article'>"
-                    f"<meta property='og:site_name' content='AgentBI'>"
-                    f"<meta property='og:title' content='AgentBI 榜单 — 225 家电商站 agent 友好度实测'>"
-                    f"<meta property='og:description' content='Shopify 86% 已部署 UCP，WooCommerce 0%。"
-                    f"平台差异比站主努力更能决定你能不能被 shopping agent 找到。'>"
-                    f"<meta property='og:url' content='https://agentbi.tech/leaderboard'>"
-                    f"<meta name='twitter:card' content='summary'>"
-                    f"<link rel='canonical' href='https://agentbi.tech/leaderboard'>"
-                    f"<link rel='stylesheet' href='/style.css'></head><body>"
-                    f"<h1>AgentBI 榜单</h1><p><a href='/'>← 检测你的站</a></p>"
-                    f"{render_leaderboard()}</body></html>").encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
+            body = self._leaderboard_body()
+            self._send_html(body)
             return self.wfile.write(body)
 
         if u.path in ("/about", "/about.html"):
