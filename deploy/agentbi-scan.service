@@ -1,0 +1,25 @@
+# /etc/systemd/system/agentbi-scan.service
+# 每日重扫一遍，产出 batch.json + 每日快照 history/batch-<date>.json
+# 默认不做多 UA 探测（请求数 ×7，对 225 个站不礼貌），榜单口径与此前一致
+
+[Unit]
+Description=agentbi daily batch scan
+After=network.target
+
+[Service]
+Type=oneshot
+User=agentbi
+Group=agentbi
+WorkingDirectory=/opt/agentbi
+ExecStart=/usr/bin/python3 -u scan_batch.py sites.txt
+TimeoutStartSec=3600
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+ReadWritePaths=/opt/agentbi

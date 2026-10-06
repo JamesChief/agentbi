@@ -7,6 +7,7 @@
     python3 scan_batch.py sites.txt --probe    # 附带多 UA 探测
 """
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -75,8 +76,20 @@ def main():
             print(f"  {tag}  {r['site']}", file=sys.stderr)
 
     ok = [r for r in rows if not r.get("error")]
-    json.dump({"generated_at": time.time(), "rows": rows},
-              open("batch.json", "w"), ensure_ascii=False, indent=1)
+    out = {"generated_at": time.time(), "rows": rows}
+
+    # 原子替换：网页端随时可能在读 batch.json，直接 open(w) 会让它读到半个文件
+    tmp = "batch.json.tmp"
+    with open(tmp, "w") as f:
+        json.dump(out, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, "batch.json")
+
+    # 每天留一份快照：趋势与「UCP 版本滞后」追踪只靠这个，同一天重复跑不覆盖
+    os.makedirs("history", exist_ok=True)
+    snap = f"history/batch-{time.strftime('%Y-%m-%d')}.json"
+    if not os.path.exists(snap):
+        with open(snap, "w") as f:
+            json.dump(out, f, ensure_ascii=False, indent=1)
 
     # 首页非 200 的站无法评估：把"我们访问不了"和"站点真的什么都没有"分开，
     # 否则会把被 WAF 拦下的大站误记成 0 分（实测 79 个 Unknown 里绝大多数是 403）。
@@ -131,8 +144,10 @@ def main():
     L.append(f"- 已部署 UCP：**{sum(1 for r in reachable if r['ucp'])}/{n}**")
     L.append(f"- 有 Product JSON-LD：**{sum(1 for r in reachable if r['product_jsonld'])}/{n}**")
     L.append(f"- 有 llms.txt：**{sum(1 for r in reachable if r['llms'])}/{n}**")
-    open("leaderboard.md", "w").write("\n".join(L) + "\n")
-    print("\n写入 batch.json / leaderboard.md", file=sys.stderr)
+    with open("leaderboard.md.tmp", "w") as f:
+        f.write("\n".join(L) + "\n")
+    os.replace("leaderboard.md.tmp", "leaderboard.md")
+    print(f"\n写入 batch.json / leaderboard.md / {snap}", file=sys.stderr)
 
 
 if __name__ == "__main__":

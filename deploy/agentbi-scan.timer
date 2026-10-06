@@ -1,0 +1,13 @@
+# /etc/systemd/system/agentbi-scan.timer
+# 服务器时区是 CST，03:17 是流量最低的时候；随机延迟 15 分钟避免每天都整点打过去
+
+[Unit]
+Description=Run agentbi batch scan daily
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target
