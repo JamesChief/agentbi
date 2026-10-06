@@ -27,7 +27,7 @@ table.dim td:nth-child(2) { font-size: 14px; }
 ul.fix { padding-left: 0; list-style: none; }
 ul.fix li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .pri { font-size: 12px; padding: 1px 7px; border-radius: 3px; color: #fff; margin-right: 6px; }
-.pri-高 { background: var(--bad); } .pri-中 { background: var(--mid); } .pri-低 { background: #888; }
+.pri-high { background: var(--bad); } .pri-medium { background: var(--mid); } .pri-low { background: #888; }
 
 .note { color: var(--mut); font-size: 13px; }
 .err { color: var(--bad); padding: 12px 0; }

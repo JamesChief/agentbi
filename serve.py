@@ -21,6 +21,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import agentbi as A
+import strings as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -55,43 +56,73 @@ def rate_ok(ip):
         return True
 
 
-def domain_ok(host):
-    """按目标域名冷却：别反复去打同一个站。"""
+def domain_ok(host, lang):
+    """按目标域名冷却：别反复去打同一个站。
+
+    语言分开计数——切语言时缓存里没有另一种语言的结果，若被冷却挡住，
+    用户看到的会是"刚检测过"而不是他想要的中文报告。代价最多是双倍请求数。
+    """
     now = time.time()
+    key = (host, lang)
     with _lock:
         if len(_domain_at) > 5000:                      # 防止无限增长
             for h, t in list(_domain_at.items()):
                 if now - t > DOMAIN_COOLDOWN:
                     del _domain_at[h]
-        t = _domain_at.get(host)
+        t = _domain_at.get(key)
         if t and now - t < DOMAIN_COOLDOWN:
             return False
-        _domain_at[host] = now
+        _domain_at[key] = now
         return True
 
 
-def do_check(url):
+def lang_of(query, cookie):
+    """?lang=zh > cookie > 默认英文（站点面向海外站主）。"""
+    v = (query or "").strip().lower()
+    return v if v in S.LANGS else (cookie if cookie in S.LANGS else S.DEFAULT)
+
+
+def render_page(name, lang):
+    """静态页是模板：先填运行时值（语言、查询串、给 JS 用的文案），再套文案表。"""
+    raw = open(os.path.join(WEB, name), encoding="utf-8").read()
+    js_keys = {k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items()
+               if k.startswith(("dim.", "rep.", "pri.", "site."))}
+    vals = {
+        "html.lang": lang,
+        "qs": f"?lang={lang}" if lang != S.DEFAULT else "",
+        "json.qs": json.dumps(f"&lang={lang}" if lang != S.DEFAULT else ""),
+        "json.lang": json.dumps(js_keys, ensure_ascii=False),
+        "alt_href": "/?lang=zh" if lang == S.DEFAULT else "/",
+        "alt_lang": "中文" if lang == S.DEFAULT else "English",
+    }
+    for k, v in vals.items():
+        raw = raw.replace("{{" + k + "}}", str(v))
+    return S.render_template(raw, lang)
+
+
+def do_check(url, lang):
     now = time.time()
+    key = (url, lang)                      # 同一 URL 的两种语言结果不共用缓存
     with _lock:
-        hit = _cache.get(url)
+        hit = _cache.get(key)
         if hit and now - hit[0] < CACHE_TTL:
             return hit[1], True
         stale = hit[1] if hit else None
     host = (urlparse(url).hostname or "").lower()
-    if not domain_ok(host):
+    if not domain_ok(host, lang):
         # 冷却期内：有旧结果就给旧的，没有就明确拒绝，不要偷偷发起抓取
         if stale:
             return stale, True
-        return {"error": f"该站点刚被检测过，请 {DOMAIN_COOLDOWN // 60} 分钟后再试"}, False
+        return {"error": S.t("err.cooldown", lang, n=DOMAIN_COOLDOWN // 60)}, False
     if not _sem.acquire(timeout=_sem_wait):
         # 宁可明确报忙，也不要让用户盯着转圈不知道发生了什么
-        return {"error": "现在排队检测的人较多，请 30 秒后重试"}, False
+        return {"error": S.t("err.busy", lang)}, False
     try:
-        res = A.run(url, timeout=15, do_probe=True, discover=True)
+        res = A.run(url, timeout=15, do_probe=True, discover=True, lang=lang)
     finally:
         _sem.release()
     with _lock:
-        _cache[url] = (time.time(), res)
+        _cache[key] = (time.time(), res)
     return res, False
 
 
@@ -111,12 +142,12 @@ def _prev_snapshot(cur_date):
     return None
 
 
-def render_leaderboard():
+def render_leaderboard(lang=S.DEFAULT):
     if not os.path.exists(BATCH):
-        return "<p>还没有榜单数据</p>"
+        return f"<p>{html.escape(S.t('lb.no_data', lang))}</p>"
     mt = os.path.getmtime(BATCH)
-    if _LB["html"] and _LB["mtime"] == mt:
-        return _LB["html"]                       # batch.json 没变就不重渲染
+    if _LB.get(lang) and _LB["mtime"] == mt:
+        return _LB[lang]                         # batch.json 没变就不重渲染
     data = json.load(open(BATCH))
     rows = data["rows"]
     ok = [r for r in rows if not r.get("error")]
@@ -125,9 +156,14 @@ def render_leaderboard():
     for r in reach:
         plat.setdefault(r["platform"], []).append(r)
 
-    L = ['<h2>按平台对比</h2>',
-         '<table><tr><th>平台</th><th>站数</th><th>UCP</th><th>产品结构化数据</th>'
-         '<th>llms.txt</th><th>平均分</th></tr>']
+    L = [f"<h2>{html.escape(S.t('lb.by_platform', lang))}</h2>",
+         "<table><tr>"
+         f"<th>{html.escape(S.t('lb.th_platform', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_n', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_ucp', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_product', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_llms', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_avg', lang))}</th></tr>"]
     for p in sorted(plat, key=lambda p: -len(plat[p])):
         g = plat[p]
         n = len(g)
@@ -143,19 +179,14 @@ def render_leaderboard():
     date = time.strftime("%Y-%m-%d", time.gmtime(when)) if when else "—"
     n403 = sum(1 for r in rows if r.get("home_status") == 403)
     un = [r for r in ok if r.get("home_status") != 200]
-    L.append("<h2>方法与局限（引用前请先读）</h2>")
+    L.append(f"<h2>{html.escape(S.t('lb.method', lang))}</h2>")
     L.append("<ul class='note'>")
-    L.append(f"<li>数据快照 <b>{date}</b>：共扫描 {len(rows)} 家电商站，首页返回 200 的 "
-             f"<b>{len(reach)}</b> 家（可评估），{len(un)} 家返回非 200（其中 {n403} 个是 403）。</li>")
-    L.append("<li><b>403 是我们的 IP 信誉问题，不是对方站点的配置问题</b>——绝大多数是企业级 WAF "
-             "拦截数据中心出口 IP（Walmart / Macy's / Nordstrom / Costco 等都在其中）。"
-             "加完整浏览器头部实测无法重现。因此本表覆盖的是<b>没有企业 WAF 的站点</b>，不是全行业。</li>")
-    L.append("<li><b>WooCommerce n=8</b>，全部来自 WooCommerce 官方 showcase（可抓取的就这么些）。"
-             "这是方向性结论，不是精确比例。</li>")
-    L.append("<li>Shopify 店铺的 <code>llms.txt</code> 与 UCP 多为<b>平台自动生成</b>"
-             "（多个店铺模板逐字节相同）——它是平台分界线，不是站主努力程度的信号。</li>")
-    L.append("<li>评分是<b>启发式</b>的：不做 JS 渲染，也不会真的通过 UCP 下单，"
-             "只验证 manifest 是否存在及其版本。</li>")
+    L.append("<li>" + S.t("lb.m1", lang, date=date, scanned=len(rows), reach=len(reach),
+                          unreach=len(un), n403=n403) + "</li>")
+    L.append("<li>" + S.t("lb.m2", lang) + "</li>")
+    L.append("<li>" + S.t("lb.m3", lang, n=len(plat.get("WooCommerce", []))) + "</li>")
+    L.append("<li>" + S.t("lb.m4", lang) + "</li>")
+    L.append("<li>" + S.t("lb.m5", lang) + "</li>")
 
     # 环比：数字每天都在变，不解释清楚，引用方拿到的前后不一致会直接质疑数据
     prev = _prev_snapshot(date)
@@ -167,26 +198,30 @@ def render_leaderboard():
 
         def delta(a, b):
             d = b - a
-            return f"{b}（{'+' if d >= 0 else '−'}{abs(d)}）"
+            sign = "+" if d >= 0 else ("−" if lang == "zh" else "-")
+            return f"{b}（{sign}{abs(d)}）"
 
-        L.append(f"<li>较上一次快照（{pdate}）：可评估 {delta(len(pr), len(reach))}，"
-                 f"部署 UCP {delta(pu, cu)}。<b>可评估数会随时间波动</b>——同一批站点在不同日期"
-                 f"相差十几个是常态（对方 WAF 策略与我们的出口 IP 信誉都在变），"
-                 f"所以引用本站数字时请带上快照日期。</li>")
+        L.append("<li>" + S.t("lb.m6", lang, pdate=pdate,
+                              reach_delta=delta(len(pr), len(reach)),
+                              ucp_delta=delta(pu, cu)) + "</li>")
     L.append("</ul>")
 
-    L.append(f"<h2>明细（可评估 {len(reach)} / 扫描 {len(rows)}）</h2>")
-    L.append('<table><tr><th>站点</th><th>平台</th><th>分数</th><th>UCP</th></tr>')
+    L.append("<h2>" + S.t("lb.detail", lang, reach=len(reach), scanned=len(rows)) + "</h2>")
+    L.append("<table><tr>"
+             f"<th>{html.escape(S.t('lb.th_site', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_platform', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_avg', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_ucp', lang))}</th></tr>")
+    dash = S.t("lb.dash", lang)
     for r in sorted(reach, key=lambda r: -r["score"]):
         L.append(f"<tr><td>{html.escape(r['site'].replace('https://',''))}</td>"
                  f"<td>{html.escape(r['platform'])}</td><td>{r['score']}</td>"
-                 f"<td>{html.escape(r['ucp'] or '—')}</td></tr>")
+                 f"<td>{html.escape(r['ucp'] or dash)}</td></tr>")
     L.append("</table>")
     if un:
-        L.append(f"<p class='note'>{len(un)} 个站点对探测器返回非 200（多为 WAF 拦截），"
-                 f"不代表其 agent 友好度低，未计入榜单。</p>")
-    _LB["mtime"], _LB["html"] = mt, "\n".join(L)
-    return _LB["html"]
+        L.append(f"<p class='note'>{S.t('lb.note_unreach', lang, n=len(un))}</p>")
+    _LB["mtime"], _LB[lang] = mt, "\n".join(L)
+    return _LB[lang]
 
 
 class H(SimpleHTTPRequestHandler):
@@ -231,21 +266,45 @@ class H(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _leaderboard_body(self):
-        return (f"<html><head><meta charset='utf-8'><title>AgentBI 榜单</title>"
-                f"<meta name='description' content='225 家电商站的 AI agent 友好度实测："
-                f"Shopify 86% 部署 UCP，WooCommerce 0%。含方法与局限说明。'>"
+    def lang(self):
+        """?lang=zh 优先，其次 cookie，默认英文。"""
+        q = parse_qs(urlparse(self.path).query)
+        cookie = ""
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            if part.strip().startswith("lang="):
+                cookie = part.strip()[len("lang="):]
+        return lang_of((q.get("lang") or [""])[0], cookie)
+
+    def _leaderboard_body(self, lang=S.DEFAULT):
+        e = html.escape
+        return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
+                f"<title>{e(S.t('lb.title', lang))}</title>"
+                f"<meta name='description' content=\"{e(S.t('og.lb_desc', lang))}\">"
                 f"<meta property='og:type' content='article'>"
                 f"<meta property='og:site_name' content='AgentBI'>"
-                f"<meta property='og:title' content='AgentBI 榜单 — 225 家电商站 agent 友好度实测'>"
-                f"<meta property='og:description' content='Shopify 86% 已部署 UCP，WooCommerce 0%。"
-                f"平台差异比站主努力更能决定你能不能被 shopping agent 找到。'>"
+                f"<meta property='og:title' content=\"{e(S.t('og.lb_title', lang))}\">"
+                f"<meta property='og:description' content=\"{e(S.t('og.lb_desc', lang))}\">"
                 f"<meta property='og:url' content='https://agentbi.tech/leaderboard'>"
                 f"<meta name='twitter:card' content='summary'>"
                 f"<link rel='canonical' href='https://agentbi.tech/leaderboard'>"
+                f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/leaderboard'>"
+                f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/leaderboard?lang=zh'>"
                 f"<link rel='stylesheet' href='/style.css'></head><body>"
-                f"<h1>AgentBI 榜单</h1><p><a href='/'>← 检测你的站</a></p>"
-                f"{render_leaderboard()}</body></html>").encode()
+                f"<h1>{e(S.t('lb.title', lang))}</h1>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a></p>"
+                f"{render_leaderboard(lang)}"
+                f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"</body></html>").encode()
+
+    def _qs(self, lang):
+        return f"?lang={lang}" if lang != S.DEFAULT else ""
+
+    def _alt(self, lang):
+        base = urlparse(self.path).path or "/"
+        return f"{base}?lang=zh" if lang == S.DEFAULT else base
+
+    def _alt_label(self, lang):
+        return "中文" if lang == S.DEFAULT else "English"
 
     def _send_html(self, body, cache="public, max-age=300"):
         self.send_response(200)
@@ -254,38 +313,54 @@ class H(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
 
+    def _send_page(self, name, lang):
+        body = render_page(name, lang).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "public, max-age=300")
+        # 语言要粘住：不带 cookie 的话点进榜单就掉回英文
+        self.send_header("Set-Cookie", f"lang={lang}; Path=/; Max-Age=31536000; SameSite=Lax")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        return self.wfile.write(body)
+
     def do_HEAD(self):
         # 不覆盖 do_HEAD 的话，HEAD /leaderboard 会走静态文件逻辑返回 404，
         # 社交卡片校验器和部分爬虫会被误导
         u = urlparse(self.path)
         if u.path in ("/leaderboard", "/leaderboard.html"):
-            return self._send_html(self._leaderboard_body())
+            return self._send_html(self._leaderboard_body(self.lang()))
         if u.path in ("/about", "/about.html"):
             self.path = "/about.html"
         return super().do_HEAD()
 
     def do_GET(self):
         u = urlparse(self.path)
+        lang = self.lang()
+
         if u.path == "/api/check":
             q = parse_qs(u.query)
             url = (q.get("url") or [""])[0].strip()
             if not URL_RE.match(url):
-                return self._json({"error": "URL 不合法（仅支持 http/https）"}, 400)
+                return self._json({"error": S.t("err.bad_url", lang)}, 400)
             if not rate_ok(self.client_ip()):
-                return self._json({"error": "请求过于频繁，请稍后再试"}, 429)
+                return self._json({"error": S.t("err.rate", lang)}, 429)
             try:
-                res, cached = do_check(url)
+                res, cached = do_check(url, lang)
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}"}, 500)
             return self._json({"cached": cached, "result": res})
 
+        if u.path in ("/", "/index.html"):
+            return self._send_page("index.html", lang)
+
         if u.path in ("/leaderboard", "/leaderboard.html"):
-            body = self._leaderboard_body()
+            body = self._leaderboard_body(lang)
             self._send_html(body)
             return self.wfile.write(body)
 
         if u.path in ("/about", "/about.html"):
-            self.path = "/about.html"      # UA 串与页脚里对外写的是 /about
+            return self._send_page("about.html", lang)
 
         return super().do_GET()
 

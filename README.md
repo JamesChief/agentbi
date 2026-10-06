@@ -73,6 +73,12 @@ Custom stacks 35 → 1 (avg 14). Two stores were one UCP version behind.
 
 ---
 
+## Language
+
+English by default (the audience is store owners, mostly non-Chinese).
+`?lang=zh` on the site, `--lang zh` on the CLI. All user-facing strings live in
+`strings.py` — **add keys in both languages**, a missing key silently falls back to English.
+
 ## Crawling behaviour
 
 - Content is fetched **only when someone submits a URL**. No continuous crawling.

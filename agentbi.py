@@ -23,6 +23,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+import strings as S
+
 # 对外服务时用于内容抓取的诚实标识（用户 2026-10-05 决定：不用伪装 UA）。
 # 上线前把 SCANNER_CONTACT 换成真实域名。
 SCANNER_CONTACT = "https://agentbi.tech/about"
@@ -401,15 +403,15 @@ def detect_platform(headers, text):
 
 # ---------------------------------------------------------------------- 评分
 
-def score(probe, struct, llms, robots, ucp):
+def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
     s, detail, skipped = 0, {}, []
 
     # 可抓取性 35
     if probe.get("skipped"):
         skipped.append(("fetch", 35))
-        detail["fetch"] = "未测（--no-probe）"
+        detail["fetch"] = S.t("rep.fetch_skipped", lang)
     elif probe.get("inconclusive"):
-        detail["fetch"] = "不可判定（探测器网络受限，不计分）"
+        detail["fetch"] = S.t("rep.fetch_inconclusive", lang)
         skipped.append(("fetch", 35))
     else:
         ags = probe.get("agents", {})
@@ -420,8 +422,8 @@ def score(probe, struct, llms, robots, ucp):
             grab += 9
         if readable:
             grab += 8 if len(readable) == len(ok) else 4
-        detail["fetch"] = (f"{len(ok)}/{len(ags)} 个 agent 可取到页面，"
-                           f"{len(readable)} 个能读到产品/价格数据")
+        detail["fetch"] = S.t("rep.fetch_detail", lang, ok=len(ok), total=len(ags),
+                              readable=len(readable))
         s += grab
 
     # 结构化产品数据 30
@@ -438,8 +440,8 @@ def score(probe, struct, llms, robots, ucp):
     if any(f in struct["fields"] for f in ("image", "description", "name")):
         sd += 5
     sd = min(sd, 30)          # 各分项权重之和为 35，按维度上限 30 截断
-    detail["structured"] = ("Product JSON-LD 完整" if sd >= 26 else
-                            "有部分产品数据" if sd else "未找到结构化产品数据")
+    detail["structured"] = (S.t("rep.struct_full", lang) if sd >= 26 else
+                            S.t("rep.struct_partial", lang) if sd else S.t("rep.struct_none", lang))
     s += sd
 
     # UCP 15（已一手核实的站点侧标识）
@@ -450,20 +452,21 @@ def score(probe, struct, llms, robots, ucp):
             up += 3
         if ucp["endpoints"]:
             up += 2
-        detail["ucp"] = (f"已部署 {ucp['version']}，"
-                         f"{len(ucp['services'])} 个服务、{len(ucp['endpoints'])} 个 endpoint，"
-                         f"兼容 {len(ucp['supported_versions'])} 个历史版本")
+        detail["ucp"] = S.t("rep.ucp_deployed", lang, v=ucp["version"],
+                            ns=len(ucp["services"]), ne=len(ucp["endpoints"]),
+                            nv=len(ucp["supported_versions"]))
     elif ucp["is_html"]:
-        detail["ucp"] = f"未部署（{UCP_PATH} 返回 HTML 页面，非 manifest）"
+        detail["ucp"] = S.t("rep.ucp_html", lang, path=UCP_PATH)
     else:
-        detail["ucp"] = f"未部署（{UCP_PATH} 返回 {ucp['status']}）"
+        detail["ucp"] = S.t("rep.ucp_status", lang, path=UCP_PATH, status=ucp["status"])
     s += up
 
     # llms.txt 10
     lm = 7 if llms["present"] else 0
     if llms["present"] and llms["links"] >= 3:
         lm += 3
-    detail["llms"] = "有且含链接" if lm == 10 else ("有" if lm else "无")
+    detail["llms"] = (S.t("rep.llms_full", lang) if lm == 10
+                      else (S.t("rep.llms_yes", lang) if lm else S.t("rep.llms_no", lang)))
     s += lm
 
     # robots 10
@@ -477,7 +480,8 @@ def score(probe, struct, llms, robots, ucp):
             rb += 4
     else:
         rb = 6  # 没有 robots.txt 等价于默认放行
-    detail["robots"] = f"拦 {len(blocked_any) if robots['present'] else 0} 类 agent" if robots["present"] else "无 robots.txt（默认放行）"
+    detail["robots"] = (S.t("rep.robots_blocking", lang, n=len(blocked_any)) if robots["present"]
+                        else S.t("rep.robots_none", lang))
     s += rb
 
     # 未测的维度不计入分母，按已测维度折算回百分制
@@ -489,40 +493,32 @@ def score(probe, struct, llms, robots, ucp):
 
 # ------------------------------------------------------------------ 修复建议
 
-def fixes(struct, llms, robots, probe, ucp, protos):
+def fixes(struct, llms, robots, probe, ucp, protos, lang=S.DEFAULT):
     out = []
     if not ucp["present"]:
-        out.append(("部署 UCP manifest", "高",
-                    f"{UCP_PATH} 返回 {ucp['status']}。UCP 已有一手核实的站点侧标识，"
-                    f"Shopify 部分店铺已自动部署（实测版本 2026-08-25）。"
-                    f"缺它意味着 shopping agent 无法按标准流程发现你的商品与下单入口。"))
+        out.append((S.t("fix.ucp_missing.title", lang), "high",
+                    S.t("fix.ucp_missing.desc", lang, path=UCP_PATH, status=ucp["status"])))
     elif len(ucp["supported_versions"]) <= 1:
-        out.append(("UCP 只声明单一版本", "中",
-                    f"当前 {ucp['version']}。多声明历史版本可兼容尚未升级的 agent。"))
+        out.append((S.t("fix.ucp_single.title", lang), "medium",
+                    S.t("fix.ucp_single.desc", lang, v=ucp["version"])))
     if not llms["present"]:
-        out.append(("加 /llms.txt", "高",
-                    "给 agent 一份纯文本站点地图：核心页面 + 一句话说明。放站点根目录。"))
+        out.append((S.t("fix.llms.title", lang), "high", S.t("fix.llms.desc", lang)))
     if not struct["has_product"]:
-        out.append(("加 Product JSON-LD", "高",
-                    "商品页嵌 <script type=\"application/ld+json\">，@type=Product，"
-                    "含 name/brand/sku/image/description。"))
+        out.append((S.t("fix.jsonld.title", lang), "high", S.t("fix.jsonld.desc", lang)))
     if struct["has_product"] and "price" not in struct["fields"]:
-        out.append(("补齐 Offer 价格", "高",
-                    "Product.offers 里给 price、priceCurrency、availability——"
-                    "shopping agent 主要靠这三个字段判断是否可买。"))
+        out.append((S.t("fix.price.title", lang), "high", S.t("fix.price.desc", lang)))
     for f in struct["missing"]:
         if f in ("priceCurrency", "availability", "brand", "sku"):
-            out.append((f"补 {f}", "中", "结构化数据字段缺失，agent 读到的信息不完整。"))
+            out.append((S.t("fix.field.title", lang, field=f), "medium",
+                        S.t("fix.field.desc", lang)))
     if probe.get("blocked"):
-        out.append((f"放行被拦的 agent: {', '.join(probe['blocked'])}", "高",
-                    "robots.txt 或 WAF 把这些 agent 挡了，且浏览器 UA 没被挡——"
-                    "属于只挡 agent，会直接损失 agent 带来的流量与订单。"))
+        out.append((S.t("fix.blocked.title", lang, agents=", ".join(probe["blocked"])), "high",
+                    S.t("fix.blocked.desc", lang)))
     if robots.get("wildcard_disallow"):
-        out.append(("检查 robots.txt 的 User-agent: * Disallow: /", "高",
-                    "通配规则会一并挡住所有 agent。"))
+        out.append((S.t("fix.wildcard.title", lang), "high", S.t("fix.wildcard.desc", lang)))
     if protos["paths"] or protos["tokens"]:
-        out.append((f"ACP/AP2 探针命中: {protos['paths'] or protos['tokens']}", "低",
-                    "（站点侧标识尚未一手核实，仅作证据，不作为结论）"))
+        out.append((S.t("fix.protos.title", lang, protos=protos["paths"] or protos["tokens"]),
+                    "low", S.t("fix.protos.desc", lang)))
     seen, uniq = set(), []
     for t, p, d in out:
         if t not in seen:
@@ -547,13 +543,14 @@ def discover_product_url(home_text, base):
     return None
 
 
-def run(url, timeout=15, do_probe=True, discover=False, product_url=None, unverified=False):
+def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
+        unverified=False, lang=S.DEFAULT):
     if not urlparse(url).scheme:
         url = "https://" + url
     origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
     home = fetch(url, UA_SCANNER, timeout)
     if home["status"] == 0:
-        return {"url": url, "error": f"无法访问：{home['error']}"}
+        return {"url": url, "error": S.t("rep.err_unreachable", lang, err=home["error"])}
 
     target, target_kind = url, "homepage"
     if product_url:
@@ -577,24 +574,25 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None, unveri
     else:
         probe = {"skipped": True, "agents": {}, "blocked": [],
                  "browser": {"status": page["status"], "bytes": page["bytes"]},
-                 "note": "已跳过多 UA 探测（--no-probe）"}
-    total, detail = score(probe, struct, llms, robots, ucp)
+                 "note": S.t("rep.probe_skipped_note", lang)}
+    total, detail = score(probe, struct, llms, robots, ucp, lang)
 
     return {"url": url, "checked_url": target, "checked_kind": target_kind,
             "platform": platform,
             "home_status": home["status"],
             "score": total, "detail": detail, "structured": struct, "llms": llms,
             "robots": robots, "ucp": ucp, "probe": probe, "protocols": protos,
-            "fixes": fixes(struct, llms, robots, probe, ucp, protos)}
+            "fixes": fixes(struct, llms, robots, probe, ucp, protos, lang)}
 
 
-def render(r):
+def render(r, lang=S.DEFAULT):
     if r.get("error"):
         return f"✗ {r['url']}: {r['error']}"
-    L = [f"\nagentbi  ·  {r['url']}", "=" * 64,
-         f"检测对象  {r['checked_url']}  ({r['checked_kind']})",
-         f"得分  {r['score']}/100"
-         + (f"   [未测: {', '.join(r['detail']['_skipped'])}]" if r["detail"]["_skipped"] else "")
+    L = ["\n" + S.t("rep.header", lang, url=r["url"]), "=" * 64,
+         S.t("rep.checked_url", lang, url=r["checked_url"], kind=r["checked_kind"]),
+         S.t("rep.score", lang, score=r["score"])
+         + (S.t("rep.untested", lang, items=", ".join(r["detail"]["_skipped"]))
+            if r["detail"]["_skipped"] else "")
          + "\n"]
     for k in ("fetch", "structured", "ucp", "llms", "robots"):
         L.append(f"  {k:12} {r['detail'][k]}")
@@ -602,38 +600,43 @@ def render(r):
     if p.get("inconclusive"):
         L.append(f"\n  ⚠ {p['note']}")
     elif p.get("agents"):
-        L.append("\n  多 UA 探测:")
+        L.append("\n" + S.t("rep.probe_head", lang))
         L.append(f"    {'browser':18} {p['browser']['status']}  "
-                 f"{p['browser']['bytes']}B  {'可读' if p['browser'].get('readable') else '—'}")
+                 f"{p['browser']['bytes']}B  "
+                 f"{S.t('rep.readable_short', lang) if p['browser'].get('readable') else '—'}")
         for n, v in p["agents"].items():
-            mark = "✗ 被拦" if v["status"] != 200 or v["bytes"] == 0 else "✓"
+            mark = S.t("rep.blocked_short", lang) if v["status"] != 200 or v["bytes"] == 0 else "✓"
             L.append(f"    {n:18} {v['status']}  {v['bytes']}B  "
-                     f"{'可读' if v['readable'] else '—'}  {mark}")
+                     f"{S.t('rep.readable_short', lang) if v['readable'] else '—'}  {mark}")
     u = r["ucp"]
     if u["present"]:
-        L.append("\n  UCP manifest:")
-        L.append(f"    version {u['version']}  历史版本 {', '.join(u['supported_versions'])}")
+        L.append("\n" + S.t("rep.ucp_head", lang))
+        L.append(S.t("rep.ucp_hist", lang, v=u["version"],
+                     versions=", ".join(u["supported_versions"])))
         for name, entries in u["services"].items():
-            L.append(f"    service {name}")
+            L.append(S.t("rep.service_line", lang, name=name))
             for e in entries[:3]:
-                L.append(f"      {e['version']}  {e['transport']}  {e['endpoint']}")
+                L.append(S.t("rep.entry_line", lang, v=e["version"],
+                             transport=e["transport"], endpoint=e["endpoint"]))
     if r["protocols"]["paths"] or r["protocols"]["tokens"]:
-        L.append(f"\n  ACP/AP2 探针（未核实）: {r['protocols']}")
+        L.append(S.t("rep.protocols", lang, protos=r["protocols"]))
     if r["fixes"]:
-        L.append("\n  修复清单:")
-        for t, pri, d in r["fixes"]:
-            L.append(f"    [{pri}] {t}\n         {d}")
+        L.append("\n" + S.t("rep.fixes_head", lang))
+        for title, pri, d in r["fixes"]:
+            L.append(S.t("rep.fix_line", lang, pri=S.t(f"pri.{pri}", lang),
+                         title=title, desc=d))
     return "\n".join(L)
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="网站的 AI agent 友好度检测")
+    ap = argparse.ArgumentParser(description="网站的 AI agent 友好度检测 / AI-agent readiness scanner")
     ap.add_argument("url")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--no-probe", action="store_true", help="跳过多 UA 探测")
-    ap.add_argument("--discover", action="store_true", help="自动找一个商品页来检测")
-    ap.add_argument("--product-url", help="指定商品页 URL")
+    ap.add_argument("--no-probe", action="store_true", help="跳过多 UA 探测 / skip the multi-UA probe")
+    ap.add_argument("--discover", action="store_true", help="自动找一个商品页来检测 / find a product page")
+    ap.add_argument("--product-url", help="指定商品页 URL / use this product page")
     ap.add_argument("--timeout", type=int, default=15)
+    ap.add_argument("--lang", default=S.DEFAULT, choices=S.LANGS, help="report language")
     a = ap.parse_args()
-    res = run(a.url, a.timeout, not a.no_probe, a.discover, a.product_url)
-    print(json.dumps(res, ensure_ascii=False, indent=1) if a.json else render(res))
+    res = run(a.url, a.timeout, not a.no_probe, a.discover, a.product_url, lang=a.lang)
+    print(json.dumps(res, ensure_ascii=False, indent=1) if a.json else render(res, a.lang))

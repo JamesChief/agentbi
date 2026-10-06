@@ -1,42 +1,48 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{html.lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AgentBI — 你的网站对 AI agent 有多友好</title>
-<meta name="description" content="输入网址，看你的网站能被 AI agent 找到、读懂、下单吗。检测 UCP 部署、产品结构化数据、llms.txt 与多 UA 抓取差异。">
+<title>{{site.title}}</title>
+<meta name="description" content="{{og.home_desc}}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="AgentBI">
-<meta property="og:title" content="AgentBI — 你的网站对 AI agent 有多友好">
-<meta property="og:description" content="Shopify 店铺 86% 已支持 agent 商务，WooCommerce 0%。你的站呢？输入网址，15 秒出报告。">
+<meta property="og:site_name" content="{{og.site_name}}">
+<meta property="og:title" content="{{og.home_title}}">
+<meta property="og:description" content="{{og.home_desc}}">
 <meta property="og:url" content="https://agentbi.tech/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="AgentBI — 你的网站对 AI agent 有多友好">
-<meta name="twitter:description" content="Shopify 店铺 86% 已支持 agent 商务，WooCommerce 0%。你的站呢？输入网址，15 秒出报告。">
+<meta name="twitter:title" content="{{og.home_title}}">
+<meta name="twitter:description" content="{{og.home_desc}}">
 <link rel="canonical" href="https://agentbi.tech/">
+<link rel="alternate" hreflang="en" href="https://agentbi.tech/">
+<link rel="alternate" hreflang="zh" href="https://agentbi.tech/?lang=zh">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <h1>AgentBI</h1>
-<p class="sub">输入网址，看你的网站能被 AI agent 找到、读懂、下单吗。</p>
+<p class="sub">{{site.sub}}</p>
 
 <form id="f">
-  <input id="u" type="text" placeholder="https://your-store.com" autocomplete="off" required>
-  <button type="submit">检测</button>
+  <input id="u" type="text" placeholder="{{site.placeholder}}" autocomplete="off" required>
+  <button type="submit">{{site.button}}</button>
 </form>
-<p class="sub"><a href="/leaderboard">查看榜单（225 家电商站实测）→</a></p>
+<p class="sub"><a href="/leaderboard{{qs}}">{{site.lb_link}}</a></p>
 
 <div id="out"></div>
 
 <footer>
-  <p>检测项：agent 能否抓取 · 产品结构化数据 · UCP 部署与版本 · llms.txt · robots。
-     工具开源，数据可复现：<a href="https://github.com/JamesChief/agentbi">github.com/JamesChief/agentbi</a></p>
-  <p><a href="/about">我们怎么抓站 / 如何让我们不抓你</a> ·
-     <a href="https://github.com/JamesChief/agentbi/issues">结果有误？来提 issue</a></p>
+  <p>{{site.checks}} <a href="https://github.com/JamesChief/agentbi">github.com/JamesChief/agentbi</a></p>
+  <p><a href="/about{{qs}}">{{site.about_link}}</a> ·
+     <a href="https://github.com/JamesChief/agentbi/issues">{{site.issues_link}}</a> ·
+     <a href="{{alt_href}}">{{alt_lang}}</a></p>
 </footer>
 
 <script>
+const L = {{json.lang}};
+const QS = {{json.qs}};
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const T = k => L[k] !== undefined ? L[k] : k;
+const fill = (s, kv) => Object.entries(kv).reduce((a,[k,v]) => a.replace('{'+k+'}', v), s);
 
 function scoreClass(s){ return s>=80?'good':s>=50?'mid':'bad'; }
 
@@ -45,7 +51,7 @@ function render(r){
   const d = r.detail || {};
   const rows = ['fetch','structured','ucp','llms','robots']
     .filter(k => d[k] !== undefined)
-    .map(k => `<tr><td>${esc(k)}</td><td>${esc(d[k])}</td></tr>`).join('');
+    .map(k => `<tr><td>${esc(T('dim.'+k))}</td><td>${esc(d[k])}</td></tr>`).join('');
 
   let probe = '';
   if (r.probe && !r.probe.skipped) {
@@ -54,8 +60,11 @@ function render(r){
     } else if (r.probe.agents) {
       const ag = Object.entries(r.probe.agents)
         .map(([n,v]) => `<tr><td>${esc(n)}</td><td>${v.status}</td>`+
-             `<td>${v.readable?'可读':'—'}</td><td>${v.status==200?'✓':'✗ 被拦'}</td></tr>`).join('');
-      probe = `<h3>多 UA 探测</h3><table><tr><th>UA</th><th>状态</th><th>产品数据</th><th>结果</th></tr>${ag}</table>`;
+             `<td>${v.readable?esc(T('rep.readable')):'—'}</td>`+
+             `<td>${v.status==200?esc(T('rep.ok')):esc(T('rep.blocked'))}</td></tr>`).join('');
+      probe = `<h3>${esc(T('rep.probe'))}</h3><table>`+
+              `<tr><th>${esc(T('rep.ua'))}</th><th>${esc(T('rep.status'))}</th>`+
+              `<th>${esc(T('rep.product'))}</th><th>${esc(T('rep.result'))}</th></tr>${ag}</table>`;
     }
   }
 
@@ -64,34 +73,36 @@ function render(r){
     const svc = Object.entries(r.ucp.services).map(([n,es]) =>
       `<tr><td>${esc(n)}</td><td>${esc((es[0]||{}).version||'')}</td>`+
       `<td>${esc((es[0]||{}).transport||'')}</td></tr>`).join('');
-    ucp = `<h3>UCP manifest</h3><p>当前版本 <code>${esc(r.ucp.version)}</code>，`+
-          `兼容历史版本 ${esc((r.ucp.supported_versions||[]).join(' / '))}</p>`+
-          `<table><tr><th>服务</th><th>版本</th><th>传输</th></tr>${svc}</table>`;
+    ucp = `<h3>${esc(T('rep.ucp_title'))}</h3>`+
+          `<p>${esc(fill(T('rep.ucp_current'),
+                         {v:r.ucp.version, versions:(r.ucp.supported_versions||[]).join(' / ')}))}</p>`+
+          `<table><tr><th>${esc(T('rep.service'))}</th><th>${esc(T('rep.version'))}</th>`+
+          `<th>${esc(T('rep.transport'))}</th></tr>${svc}</table>`;
   }
 
   const fixes = (r.fixes||[]).map(f =>
-    `<li><span class="pri pri-${esc(f[1])}">${esc(f[1])}</span> <b>${esc(f[0])}</b><br>${esc(f[2])}</li>`).join('');
+    `<li><span class="pri pri-${esc(f[1])}">${esc(T('pri.'+f[1]))}</span> <b>${esc(f[0])}</b><br>${esc(f[2])}</li>`).join('');
 
   return `
     <div class="score ${scoreClass(r.score)}">${r.score}<span>/100</span></div>
-    <p class="sub">检测对象 <code>${esc(r.checked_url)}</code>（${esc(r.checked_kind)}）</p>
+    <p class="sub">${esc(T('rep.checked'))} <code>${esc(r.checked_url)}</code>（${esc(r.checked_kind)}）</p>
     <table class="dim">${rows}</table>
     ${ucp}${probe}
-    ${fixes?`<h3>修复清单</h3><ul class="fix">${fixes}</ul>`:''}`;
+    ${fixes?`<h3>${esc(T('rep.fixes'))}</h3><ul class="fix">${fixes}</ul>`:''}`;
 }
 
 document.getElementById('f').addEventListener('submit', async e => {
   e.preventDefault();
   const url = document.getElementById('u').value.trim();
   const out = document.getElementById('out');
-  out.innerHTML = '<p class="note">检测中，约需 10–20 秒…</p>';
+  out.innerHTML = '<p class="note">' + esc(T('site.scanning')) + '</p>';
   try {
-    const res = await fetch('/api/check?url=' + encodeURIComponent(url));
+    const res = await fetch('/api/check?url=' + encodeURIComponent(url) + QS);
     const j = await res.json();
     if (j.error) { out.innerHTML = `<div class="err">✗ ${esc(j.error)}</div>`; return; }
-    out.innerHTML = render(j.result) + (j.cached ? '<p class="note">（来自缓存）</p>' : '');
+    out.innerHTML = render(j.result) + (j.cached ? `<p class="note">${esc(T('site.cached'))}</p>` : '');
   } catch (err) {
-    out.innerHTML = `<div class="err">✗ 请求失败：${esc(err.message)}</div>`;
+    out.innerHTML = `<div class="err">✗ ${esc(fill(T('site.req_failed'), {err:err.message}))}</div>`;
   }
 });
 </script>
