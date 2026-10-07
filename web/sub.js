@@ -1,5 +1,6 @@
-// 订阅框提交。首页和榜单页共用：文案从 window.__SUB_L 取（各自注入）。
-// 不收集 IP 之外的任何东西——表单里就一个邮箱字段。
+// 订阅框提交。目前只挂在榜单页（首页放过一版，挡检测流程，已撤）。
+// 文案从 window.__SUB_L 取，由 serve.py 的 sub_script() 注入。
+// 不收集邮箱以外的任何东西——表单里就一个字段。
 (function () {
   const L = window.__SUB_L || {};
   const T = k => L[k] !== undefined ? L[k] : k;
@@ -16,11 +17,9 @@
       if (!email) { msg.textContent = T('sub.err_invalid'); return; }
       msg.textContent = '…';
 
-      // src 只用来区分长版/短版哪个转化好，不入文案
-      const src = box && box.classList.contains('subscribe-long') ? 'long' : 'short';
       const lang = document.documentElement.lang || 'en';
       try {
-        const res = await fetch('/api/subscribe?src=' + src + '&lang=' + encodeURIComponent(lang), {
+        const res = await fetch('/api/subscribe?lang=' + encodeURIComponent(lang), {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({email: email})

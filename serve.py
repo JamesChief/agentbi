@@ -101,19 +101,16 @@ def lang_of(query, cookie):
     return v if v in S.LANGS else (cookie if cookie in S.LANGS else S.DEFAULT)
 
 
-def sub_block(lang, long_form):
-    """订阅框。长版（首页报告下方）带说明，短版（页脚 / 榜单页）一行。
+def sub_block(lang):
+    """订阅框。只放在榜单页——首页放过一版，结论是挡在检测流程里很碍事。
 
-    两个版本用同一套 class，交给 web/sub.js 统一接管提交。
+    注意：别用 .sub 做 class，那已经是站点副标题的（见 style.css）。
     """
     e = html.escape
-    # 注意：别用 .sub——那已经是站点副标题的 class（style.css）
-    desc = S.t("sub.desc_long" if long_form else "sub.desc_short", lang)
-    cls = "subscribe subscribe-long" if long_form else "subscribe subscribe-short"
-    head = f"<h3>{e(S.t('sub.title', lang))}</h3>" if long_form else ""
-    return (f"<div class='{cls}'>{head}"
+    return (f"<div class='subscribe'>"
+            f"<h3>{e(S.t('sub.title', lang))}</h3>"
             f"<form class='subscribe-form' novalidate>"
-            f"<p class='subscribe-desc'>{e(desc)}</p>"
+            f"<p class='subscribe-desc'>{e(S.t('sub.desc_long', lang))}</p>"
             f"<input type='email' name='email' class='subscribe-email' "
             f"placeholder=\"{e(S.t('sub.placeholder', lang))}\" autocomplete='email' required>"
             f"<button type='submit'>{e(S.t('sub.button', lang))}</button>"
@@ -126,8 +123,7 @@ def sub_block(lang, long_form):
 def sub_script(lang):
     """给 JS 用的订阅文案 + 处理脚本。
 
-    首页的 L 里已经含 sub.*（见 render_page 的 js_keys），这里只单独喂给榜单页——
-    榜单是 Python 直接拼出来的，不走 index.html 的模板。
+    榜单页是 Python 直接拼出来的，不走 index.html 的模板，所以文案要单独喂一次。
     """
     keys = {k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items()
             if k.startswith("sub.")}
@@ -139,7 +135,7 @@ def render_page(name, lang):
     """静态页是模板：先填运行时值（语言、查询串、给 JS 用的文案），再套文案表。"""
     raw = open(os.path.join(WEB, name), encoding="utf-8").read()
     js_keys = {k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items()
-               if k.startswith(("dim.", "rep.", "pri.", "site.", "sub."))}
+               if k.startswith(("dim.", "rep.", "pri.", "site."))}
     vals = {
         "html.lang": lang,
         "qs": f"?lang={lang}" if lang != S.DEFAULT else "",
@@ -147,8 +143,6 @@ def render_page(name, lang):
         "json.lang": json.dumps(js_keys, ensure_ascii=False),
         "alt_href": "/?lang=zh" if lang == S.DEFAULT else "/",
         "alt_lang": "中文" if lang == S.DEFAULT else "English",
-        "sub_long": sub_block(lang, True),
-        "sub_short": sub_block(lang, False),
     }
     for k, v in vals.items():
         raw = raw.replace("{{" + k + "}}", str(v))
@@ -348,7 +342,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<h1>{e(S.t('lb.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a></p>"
                 f"{render_leaderboard(lang)}"
-                f"{sub_block(lang, False)}"
+                f"{sub_block(lang)}"
                 f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
                 f"{sub_script(lang)}"
                 f"</body></html>").encode()
@@ -446,11 +440,10 @@ class H(SimpleHTTPRequestHandler):
         if not sub_rate_ok(ip):
             return self._json({"error": S.t("sub.err_rate", lang)}, 429)
 
-        # 记邮箱 + 时间戳 + 来源 + 语言。**不记 IP**——订阅只需要这三样，
+        # 记邮箱 + 时间戳 + 语言。**不记 IP**——订阅只需要这三样，
         # 多记的每一条都是出事时要解释的东西。IP 只用于限流，用完即弃。
         rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-               "email": email, "src": (parse_qs(u.query).get("src") or [""])[0][:16],
-               "lang": lang}
+               "email": email, "lang": lang}
         try:
             with _sub_lock:
                 seen = set()

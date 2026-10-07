@@ -33,7 +33,6 @@ STR = {
         "sub.desc_long": "I re-scan the same 225 stores every day. Leave your email and you'll get "
                          "the weekly digest when it starts: UCP version moves, new deployments, "
                          "and what changed week over week.",
-        "sub.desc_short": "Weekly digest of the 225-store scan — leave your email:",
         "sub.placeholder": "you@your-store.com",
         "sub.button": "Notify me",
         "sub.consent": "Used only to send the digest. No tracking, no sharing, unsubscribe any time.",
@@ -241,7 +240,6 @@ STR = {
         "sub.title": "每周摘要",
         "sub.desc_long": "我每天重扫这 225 家站。留下邮箱，每周摘要开始发的时候你会收到第一期："
                          "UCP 版本变化、新部署的站点、以及和上一周的环比。",
-        "sub.desc_short": "225 家站扫描结果的每周摘要 —— 留下邮箱：",
         "sub.placeholder": "you@your-store.com",
         "sub.button": "订阅",
         "sub.consent": "只用于发送摘要，不做追踪、不对外共享，随时可退订。",
