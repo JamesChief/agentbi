@@ -119,10 +119,10 @@ STR = {
         "about.li_issue": "<b>(preferred) Open an issue</b> with the "
                           "<a href=\"https://github.com/JamesChief/agentbi/issues/new?template=opt-out.yml\">"
                           "\"stop scanning\" template</a> and we add the domain to the blocklist, "
-                          "which is checked before fetching. This is the <b>only channel that "
-                          "works today</b>.",
-        "about.li_email": "Email: <code>contact@agentbi.tech</code> (the domain mailbox is still "
-                          "being set up; if it bounces, use the issue above)",
+                          "which is checked before fetching.",
+        "about.li_email": "Email: <a href=\"mailto:contact@agentbi.tech\">"
+                          "<code>contact@agentbi.tech</code></a> — reply \"stop\" and the domain "
+                          "is added to the blocklist",
         "about.h_data": "Data",
         "about.p_data": "Results are published on the leaderboard. Only sites returning 200 are "
                         "counted; sites returning non-200 (mostly enterprise WAFs) are absent "
@@ -306,10 +306,9 @@ STR = {
         "about.p_optout": "目前尚未实现 robots.txt 自动遵从——这是已知的待办。可用的退出通道有两个：",
         "about.li_issue": "<b>（推荐）开一个 issue</b>："
                           "<a href=\"https://github.com/JamesChief/agentbi/issues/new?template=opt-out.yml\">"
-                          "「要求停止扫描」模板</a>，把域名加进屏蔽清单，抓取前会检查。"
-                          "这是<b>当前唯一确定生效</b>的通道。",
-        "about.li_email": "邮件：<code>contact@agentbi.tech</code>（域名邮箱仍在配置中，"
-                          "若退信请改用上面的 issue）",
+                          "「要求停止扫描」模板</a>，把域名加进屏蔽清单，抓取前会检查。",
+        "about.li_email": "邮件：<a href=\"mailto:contact@agentbi.tech\">"
+                          "<code>contact@agentbi.tech</code></a>，回复 stop 即加入屏蔽清单",
         "about.h_data": "数据",
         "about.p_data": "检测结果会被公开收录进榜单。榜单只统计返回 200 的站点；对探测器返回非 200 的"
                         "站点（多为企业级 WAF 拦截）不会出现在榜单里，也不会被解读为「该站 "
