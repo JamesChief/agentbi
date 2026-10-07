@@ -5,8 +5,10 @@
 域名里有多少是真实的、可点名的站点。这个脚本给出这两组数。
 
     python3 stats.py /var/log/caddy/agentbi.log          # 在服务器上直接跑
-    ssh admin@***REMOVED*** "sudo cat /var/log/caddy/agentbi.log" | python3 stats.py -
+    ssh <你的主机> "sudo cat /var/log/caddy/agentbi.log" | python3 stats.py -
     python3 stats.py /var/log/caddy/agentbi.log --top 30
+
+主机地址与登录用户写在 部署清单.md（未提交进公开仓库），别把真实 IP 抄进这里。
 
 只统计 /api/check（真正发起检测的端点）；静态页面与榜单不计数。
 """

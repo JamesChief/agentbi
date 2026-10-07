@@ -2,12 +2,18 @@ __pycache__/
 *.pyc
 
 # 未公开：运营部署信息（含真实 IP / 登录用户）与发布稿草稿
+#
+# 凡是"只给自己看"的文档一律不放进公开仓库——判断标准不是文件名，而是
+# 这些内容给别人看了有没有害处。踩过两次：outreach.md（含真实收件地址与写好
+# 的冷邮）、stats.py 里的 ssh admin@<真实 IP> 示例。
 部署清单.md
 post_draft.md
 posts_en.md
+outreach.md
 history/
 contacts.csv
 contacts.md
+coldmail*.md
 
 # 订阅者邮箱。服务器上的 /opt/agentbi/subscribers.jsonl 是唯一真实数据，
 # 部署包里绝不能带它（会把线上数据覆盖回去）。
