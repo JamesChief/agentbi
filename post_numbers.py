@@ -37,6 +37,33 @@ def main():
 
     print(f"# 快照 {date}（扫描 {len(rows)}｜可评估 {len(reach)}｜非 200 {len(non200)}｜"
           f"连接失败 {len(dead)}）\n")
+
+    # UCP 普查口径与首页可达性解耦：首页被 WAF 拦住，well-known 路径照样可能返回内容。
+    # 用"首页 200"做闸门会把头部零售商的阳性静默丢掉（见 ucp#904）。
+    def bucket(r):
+        s = r.get("ucp_status")
+        if r.get("ucp"):
+            return "200 + parses (positive)"
+        if s == 200:
+            return "200 but does not parse"
+        if s == 404:
+            return "404"
+        if s == 410:
+            return "410"
+        if s == 403:
+            return "403"
+        if s in (429, 418, 503):
+            return "429/418/503"
+        if not s:
+            return "could not connect"
+        return f"other {s}"
+
+    bc = collections.Counter(bucket(r) for r in rows)
+    print("UCP 端点普查（全部站点，不看首页状态）:")
+    for k, v in bc.most_common():
+        print(f"  {k:<28} {v}")
+    print()
+
     print("| platform | n | UCP deployed | product data | llms.txt | avg score |")
     print("|---|---|---|---|---|---|")
 
@@ -52,19 +79,21 @@ def main():
               f"| {sum(1 for r in g if r['llms'])} "
               f"| {sum(r['score'] for r in g)//n} |")
 
-    vc = collections.Counter(r["ucp"] for r in reach if r.get("ucp"))
-    print("\nUCP 版本分布:", dict(vc) or "无")
+    vc = collections.Counter(r["ucp"] for r in rows if r.get("ucp"))
+    print("\nUCP 版本分布（普查口径）:", dict(vc) or "无")
 
     latest = max(vc) if vc else None
-    lag = [(r["site"], r["ucp"]) for r in reach if r.get("ucp") and latest and r["ucp"] != latest]
+    lag = [(r["site"].replace("https://", ""), r["ucp"])
+           for r in rows if r.get("ucp") and latest and r["ucp"] != latest]
     print("版本滞后（不是最新版）:", lag or "无")
 
-    no_ucp = [r["site"].replace("https://", "") for r in by.get("Shopify", []) if not r["ucp"]]
-    print(f"\nShopify 未部署 UCP（{len(no_ucp)}）:", ", ".join(no_ucp) or "无")
+    shop_all = [r for r in rows if r.get("platform") == "Shopify"]
+    no_ucp = [r["site"].replace("https://", "") for r in shop_all if not r["ucp"]]
+    print(f"\nShopify 未部署 UCP（{len(no_ucp)}/{len(shop_all)}）:", ", ".join(no_ucp) or "无")
 
-    non_shopify_ucp = [r["site"].replace("https://", "")
-                       for r in reach if r.get("ucp") and r["platform"] != "Shopify"]
-    print("非 Shopify 却部署了 UCP:", ", ".join(non_shopify_ucp) or "无")
+    non_shopify_ucp = [(r["site"].replace("https://", ""), r.get("home_status"))
+                       for r in rows if r.get("ucp") and r.get("platform") != "Shopify"]
+    print("非 Shopify 却部署了 UCP（含首页被拦的）:", non_shopify_ucp or "无")
 
     print(f"\n局限提示（稿子必须写）：WooCommerce n={len(by.get('WooCommerce', []))}；"
           f"可评估率 {100*len(reach)//len(rows)}%，其余多为 WAF 拦截，不代表对方配置。")

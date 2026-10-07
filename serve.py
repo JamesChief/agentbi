@@ -205,19 +205,85 @@ def render_leaderboard(lang=S.DEFAULT):
     for r in reach:
         plat.setdefault(r["platform"], []).append(r)
 
-    L = [f"<h2>{html.escape(S.t('lb.by_platform', lang))}</h2>",
+    # ---- 1. UCP 端点普查 ----------------------------------------------------
+    # 口径与首页可达性解耦：首页被 WAF 拦住，well-known 路径照样可能返回内容。
+    # 之前用"首页 200"做闸门，把 ridge / farfetch / chewy / theiconic 四个阳性
+    # 静默丢了——而它们正是头部零售商。见 ucp#904 与 #867。
+    def bucket(r):
+        s = r.get("ucp_status")
+        if r.get("ucp"):
+            return "pos"
+        if s == 200:
+            return "noparse"
+        if s == 404:
+            return "404"
+        if s == 410:
+            return "410"
+        if s == 403:
+            return "403"
+        if s in (429, 418, 503):
+            return "rate"
+        if not s:
+            return "err"
+        return "other"
+
+    order = [("pos", "b_pos"), ("noparse", "b_noparse"), ("404", "b_404"),
+             ("410", "b_410"), ("403", "b_403"), ("rate", "b_rate"),
+             ("err", "b_err"), ("other", "b_other")]
+    buckets = {}
+    for r in rows:
+        buckets.setdefault(bucket(r), []).append(r)
+
+    L = [f"<h2>{html.escape(S.t('lb.h_census', lang))}</h2>",
+         f"<p class='note'>{S.t('lb.census_note', lang)}</p>",
          "<table><tr>"
-         f"<th>{html.escape(S.t('lb.th_platform', lang))}</th>"
-         f"<th>{html.escape(S.t('lb.th_n', lang))}</th>"
-         f"<th>{html.escape(S.t('lb.th_ucp', lang))}</th>"
-         f"<th>{html.escape(S.t('lb.th_product', lang))}</th>"
-         f"<th>{html.escape(S.t('lb.th_llms', lang))}</th>"
-         f"<th>{html.escape(S.t('lb.th_avg', lang))}</th></tr>"]
+         f"<th>{html.escape(S.t('lb.th_bucket', lang))}</th>"
+         f"<th>{html.escape(S.t('lb.th_n', lang))}</th></tr>"]
+    for k, key in order:
+        if not buckets.get(k):
+            continue
+        L.append(f"<tr><td>{html.escape(S.t('lb.' + key, lang))}</td>"
+                 f"<td>{len(buckets[k])}</td></tr>")
+    L.append("</table>")
+
+    # ---- 2. 阳性：版本与平台 ------------------------------------------------
+    pos = [r for r in rows if r.get("ucp")]
+    if pos:
+        vers, pplat = {}, {}
+        for r in pos:
+            vers[r["ucp"]] = vers.get(r["ucp"], 0) + 1
+            pplat[r.get("platform", "?")] = pplat.get(r.get("platform", "?"), 0) + 1
+        vstr = ", ".join(f"<code>{html.escape(v)}</code> ×{n}"
+                         for v, n in sorted(vers.items(), reverse=True))
+        pstr = ", ".join(f"{html.escape(p)} {n}" for p, n in
+                         sorted(pplat.items(), key=lambda x: -x[1]))
+        L.append(f"<h2>{html.escape(S.t('lb.h_pos', lang))}</h2>")
+        L.append("<ul class='note'>")
+        L.append("<li>" + S.t("lb.pos_ver", lang, versions=vstr) + "</li>")
+        L.append("<li>" + S.t("lb.pos_plat", lang, platforms=pstr) + "</li>")
+        L.append("<li>" + S.t("lb.decision_note", lang, n=len(pos),
+                              shopify=pplat.get("Shopify", 0)) + "</li>")
+        hid = [r for r in pos if r.get("home_status") != 200]
+        if hid:
+            hosts = ", ".join(f"<code>{html.escape(r['site'].replace('https://', ''))}</code>"
+                              f" ({r.get('home_status')})" for r in hid)
+            L.append("<li>" + S.t("lb.pos_hidden", lang, n=len(hid), hosts=hosts) + "</li>")
+        L.append("</ul>")
+
+    # ---- 3. 站点可读性（仍需首页 200）---------------------------------------
+    hidden = sum(1 for r in pos if r.get("home_status") != 200)
+    L.append(f"<h2>{html.escape(S.t('lb.h_read', lang))}</h2>")
+    L.append(f"<p class='note'>{S.t('lb.read_note', lang, n=len(reach), hidden=hidden)}</p>")
+    L.append("<table><tr>"
+             f"<th>{html.escape(S.t('lb.th_platform', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_n', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_product', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_llms', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_avg', lang))}</th></tr>")
     for p in sorted(plat, key=lambda p: -len(plat[p])):
         g = plat[p]
         n = len(g)
         L.append(f"<tr><td>{html.escape(p)}</td><td>{n}</td>"
-                 f"<td>{sum(1 for r in g if r['ucp'])}/{n}</td>"
                  f"<td>{sum(1 for r in g if r['product_jsonld'])}/{n}</td>"
                  f"<td>{sum(1 for r in g if r['llms'])}/{n}</td>"
                  f"<td>{sum(r['score'] for r in g) // n}</td></tr>")
@@ -236,6 +302,7 @@ def render_leaderboard(lang=S.DEFAULT):
     L.append("<li>" + S.t("lb.m3", lang, n=len(plat.get("WooCommerce", []))) + "</li>")
     L.append("<li>" + S.t("lb.m4", lang) + "</li>")
     L.append("<li>" + S.t("lb.m5", lang) + "</li>")
+    L.append("<li>" + S.t("lb.f_frame", lang, scanned=len(rows)) + "</li>")
 
     # 环比：数字每天都在变，不解释清楚，引用方拿到的前后不一致会直接质疑数据
     prev = _prev_snapshot(date)

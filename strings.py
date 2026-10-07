@@ -106,6 +106,46 @@ STR = {
         "lb.no_data": "No leaderboard data yet",
         "lb.dash": "—",
 
+        # UCP 端点普查：与首页可达性解耦，按 #867 的 reporting frame 分桶
+        "lb.h_census": "UCP endpoint census",
+        "lb.census_note": "Counts responses to <code>/.well-known/ucp</code> only, "
+                          "<b>independent of whether the homepage was reachable</b> — a storefront "
+                          "behind a WAF can still serve the well-known path. \"Could not ask\" and "
+                          "\"no\" are reported separately, per the reporting frame proposed in "
+                          "<a href=\"https://github.com/Universal-Commerce-Protocol/ucp/discussions/867\">"
+                          "ucp#867</a>. Nothing here is an adoption rate.",
+        "lb.th_bucket": "Response",
+        "lb.b_pos": "200 + parses → positive",
+        "lb.b_noparse": "200 but does not parse (could not ask)",
+        "lb.b_404": "404",
+        "lb.b_410": "410 Gone",
+        "lb.b_403": "403 (refused to us)",
+        "lb.b_rate": "429 / 418 / 503",
+        "lb.b_err": "could not connect",
+        "lb.b_other": "other",
+        "lb.h_pos": "Positives",
+        "lb.pos_ver": "Versions declared: {versions}.",
+        "lb.pos_plat": "Platform recorded per positive: {platforms}.",
+        "lb.decision_note": "<b>{n} positives, but {shopify} of them are Shopify</b> — that may be "
+                            "one platform decision rather than {shopify} merchant choices. Both "
+                            "counts are published because they answer different questions.",
+        "lb.pos_hidden": "<b>{n} positives have a homepage that does not return 200</b> "
+                         "({hosts}). Their WAFs block the storefront but not the well-known path, "
+                         "so any census that gates on homepage reachability drops them silently — "
+                         "and they are the largest retailers in the sample.",
+        "lb.h_read": "Storefront readability",
+        "lb.read_note": "Only the {n} stores whose homepage answered 200 can be scored for content. "
+                        "UCP is deliberately <b>not</b> in this table: gating it on homepage "
+                        "reachability was hiding {hidden} positives whose WAF blocks the storefront "
+                        "but not the well-known path.",
+        "lb.f_frame": "<b>Reporting frame.</b> Sampling frame: a hand-built convenience sample of "
+                      "{scanned} consumer/DTC storefronts plus the WooCommerce official showcase — "
+                      "<b>not a random draw</b>, and skewed towards Shopify, so the aggregate rate "
+                      "reflects the platform mix of the sample. Paths checked: "
+                      "<code>/.well-known/ucp</code> only, one route, one attempt, no retries, "
+                      "redirects followed. Positive criterion: status 200 + parses as JSON + "
+                      "<code>ucp.version</code> present.",
+
         "about.title": "About AgentBI",
         "about.h_what": "What this is",
         "about.p_what": "AgentBI measures how friendly a site is to AI agents: can an agent "
@@ -306,6 +346,43 @@ STR = {
                           "不代表其 agent 友好度低，未计入榜单。",
         "lb.no_data": "还没有榜单数据",
         "lb.dash": "—",
+
+        # UCP 端点普查：与首页可达性解耦，按 #867 的 reporting frame 分桶
+        "lb.h_census": "UCP 端点普查",
+        "lb.census_note": "只统计 <code>/.well-known/ucp</code> 的响应，"
+                          "<b>与首页是否可达无关</b>——被 WAF 拦住首页的站点，"
+                          "well-known 路径照样可能返回内容。按 "
+                          "<a href=\"https://github.com/Universal-Commerce-Protocol/ucp/discussions/867\">"
+                          "ucp#867</a> 提出的报告框架，「无法询问」与「没有」分开报。"
+                          "这里没有任何一个数字是采用率。",
+        "lb.th_bucket": "响应",
+        "lb.b_pos": "200 且可解析 → 阳性",
+        "lb.b_noparse": "200 但解析不了（无法询问）",
+        "lb.b_404": "404",
+        "lb.b_410": "410 Gone",
+        "lb.b_403": "403（拒绝我们）",
+        "lb.b_rate": "429 / 418 / 503",
+        "lb.b_err": "连不上",
+        "lb.b_other": "其他",
+        "lb.h_pos": "阳性明细",
+        "lb.pos_ver": "声明的版本：{versions}。",
+        "lb.pos_plat": "逐条记录平台：{platforms}。",
+        "lb.decision_note": "<b>{n} 个阳性里有 {shopify} 个是 Shopify</b>——这可能只是"
+                            "一个平台决策，而不是 {shopify} 个商户各自的选择。"
+                            "两个数字都公布，因为它们回答的是不同的问题。",
+        "lb.pos_hidden": "<b>有 {n} 个阳性的首页不返回 200</b>（{hosts}）。"
+                         "它们的 WAF 拦首页但不拦 well-known 路径——"
+                         "任何用首页可达性做闸门的普查都会把它们静默丢掉，"
+                         "而它们恰恰是样本里最大的零售商。",
+        "lb.h_read": "站点可读性",
+        "lb.read_note": "只有首页返回 200 的 {n} 家能就内容打分。UCP <b>故意不放在这张表里</b>——"
+                        "用首页可达性做闸门，会把 {hidden} 个阳性藏起来："
+                        "它们的 WAF 拦首页，但不拦 well-known 路径。",
+        "lb.f_frame": "<b>报告框架。</b>抽样框：{scanned} 个消费类/DTC 店铺的手工便利样本，"
+                      "外加 WooCommerce 官方 showcase——<b>不是随机抽样</b>，且偏向 Shopify，"
+                      "所以汇总比例反映的是样本的平台构成。检查路径：只查 "
+                      "<code>/.well-known/ucp</code>，单路径、单次尝试、不重试、跟进重定向。"
+                      "阳性判据：状态 200 + 可解析为 JSON + 含 <code>ucp.version</code>。",
 
         "about.title": "关于 AgentBI",
         "about.h_what": "这是什么",

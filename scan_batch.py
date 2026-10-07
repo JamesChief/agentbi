@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 import agentbi as A
 
@@ -32,20 +33,44 @@ DEFAULT_SITES = [
 ]
 
 
+def ucp_fields(u):
+    """UCP 端点探测结果。#867 报告框架要求把"200 但解析不了""404""410""被拒"
+    分开报——不能折成一个"没部署"，否则不同普查的数字没法放在一张表里。"""
+    return {
+        "ucp": u["version"] if u["present"] else None,
+        "ucp_status": u["status"],
+        "ucp_ctype": u["ctype"],
+        "ucp_is_html": bool(u["is_html"]),
+        "ucp_bytes": u["raw_bytes"],
+        "ucp_redirected": bool(u["redirected"]),
+        "ucp_versions": len(u["supported_versions"]),
+        "ucp_services": list(u["services"]),
+    }
+
+
+def origin_of(url):
+    if not urlparse(url).scheme:
+        url = "https://" + url
+    return f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+
+
 def one(url, do_probe):
     try:
         r = A.run(url, timeout=15, do_probe=do_probe, discover=True)
         if r.get("error"):
-            return {"site": url, "error": r["error"]}
+            # 首页连不上不等于 well-known 路径连不上。run() 在首页不可达时就返回了，
+            # 但普查的口径是"UCP 端点探过没有"，所以这里单独再探一次——
+            # 否则"无法询问"会被静默记成"没部署"。
+            row = {"site": url, "error": r["error"], "home_status": 0, "platform": "?"}
+            row.update(ucp_fields(A.check_ucp(origin_of(url), A.UA_SCANNER)))
+            return row
         return {
             "site": url,
             "platform": r["platform"],
             "home_status": r["home_status"],
             "checked": r["checked_url"],
             "score": r["score"],
-            "ucp": r["ucp"]["version"] if r["ucp"]["present"] else None,
-            "ucp_versions": len(r["ucp"]["supported_versions"]),
-            "ucp_services": list(r["ucp"]["services"]),
+            **ucp_fields(r["ucp"]),
             "product_jsonld": r["structured"]["has_product"],
             "price": "price" in r["structured"]["fields"],
             "availability": "availability" in r["structured"]["fields"],
@@ -55,6 +80,7 @@ def one(url, do_probe):
             "inconclusive": bool(r["probe"].get("inconclusive")),
             "n_fixes": len(r["fixes"]),
         }
+
     except Exception as e:
         return {"site": url, "error": f"{type(e).__name__}: {e}"}
 

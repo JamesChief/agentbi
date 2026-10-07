@@ -325,9 +325,15 @@ PROTO_TOKENS = re.compile(r'\b(acp|ucp|ap2|agentic[- ]commerce)\b', re.I)
 def check_ucp(origin, ua, timeout=12):
     """解析 UCP manifest。返回结构化的版本/服务信息，用于"落后几个版本"的判断。"""
     out = {"present": False, "status": 0, "version": None, "is_html": False,
-           "supported_versions": [], "services": {}, "endpoints": [], "raw_bytes": 0}
-    r = fetch(urljoin(origin, UCP_PATH), ua, timeout)
+           "supported_versions": [], "services": {}, "endpoints": [], "raw_bytes": 0,
+           "ctype": "", "final_url": "", "redirected": False}
+    target = urljoin(origin, UCP_PATH)
+    r = fetch(target, ua, timeout)
     out["status"], out["raw_bytes"] = r["status"], r["bytes"]
+    out["ctype"] = (r.get("headers") or {}).get("Content-Type", "").split(";")[0].strip().lower()
+    out["final_url"] = r.get("final_url") or ""
+    # 尾斜杠也算重定向：theiconic 的 /.well-known/ucp → /ucp/ 才返回内容
+    out["redirected"] = bool(out["final_url"]) and out["final_url"].rstrip("/") != target.rstrip("/")
     if r["status"] != 200:
         return out
     # soft-404：有站点对任意路径返回 200 + HTML（实测 warbyparker 返回 190KB 的 Next.js
