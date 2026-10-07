@@ -18,3 +18,4 @@ coldmail*.md
 # 订阅者邮箱。服务器上的 /opt/agentbi/subscribers.jsonl 是唯一真实数据，
 # 部署包里绝不能带它（会把线上数据覆盖回去）。
 subscribers.jsonl
+contacts.py
