@@ -30,7 +30,10 @@
 
 <div id="out"></div>
 
+{{sub_long}}
+
 <footer>
+  {{sub_short}}
   <p>{{site.checks}} <a href="https://github.com/JamesChief/agentbi">github.com/JamesChief/agentbi</a></p>
   <p><a href="/about{{qs}}">{{site.about_link}}</a> ·
      <a href="https://github.com/JamesChief/agentbi/issues">{{site.issues_link}}</a> ·
@@ -40,6 +43,7 @@
 <script>
 const L = {{json.lang}};
 const QS = {{json.qs}};
+window.__SUB_L = L;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const T = k => L[k] !== undefined ? L[k] : k;
 const fill = (s, kv) => Object.entries(kv).reduce((a,[k,v]) => a.replace('{'+k+'}', v), s);
@@ -106,5 +110,6 @@ document.getElementById('f').addEventListener('submit', async e => {
   }
 });
 </script>
+<script src="/sub.js" defer></script>
 </body>
 </html>

@@ -28,6 +28,20 @@ STR = {
         "site.req_failed": "Request failed: {err}",
         "site.err": "✗ {msg}",
 
+        # 订阅。文案刻意不承诺发送节奏——发送通道还没接，承诺了就是骗人。
+        "sub.title": "Weekly digest",
+        "sub.desc_long": "I re-scan the same 225 stores every day. Leave your email and you'll get "
+                         "the weekly digest when it starts: UCP version moves, new deployments, "
+                         "and what changed week over week.",
+        "sub.desc_short": "Weekly digest of the 225-store scan — leave your email:",
+        "sub.placeholder": "you@your-store.com",
+        "sub.button": "Notify me",
+        "sub.consent": "Used only to send the digest. No tracking, no sharing, unsubscribe any time.",
+        "sub.ok": "Got it — you're on the list.",
+        "sub.err_invalid": "That doesn't look like an email address.",
+        "sub.err_rate": "Too many attempts. Try again in a while.",
+        "sub.err_fail": "Something broke on my side. Try again, or open an issue.",
+
         "dim.fetch": "Fetchable by agents",
         "dim.structured": "Product structured data",
         "dim.ucp": "UCP manifest",
@@ -222,6 +236,19 @@ STR = {
         "site.cached": "（来自缓存）",
         "site.req_failed": "请求失败：{err}",
         "site.err": "✗ {msg}",
+
+        # 订阅。文案刻意不承诺发送节奏——发送通道还没接，承诺了就是骗人。
+        "sub.title": "每周摘要",
+        "sub.desc_long": "我每天重扫这 225 家站。留下邮箱，每周摘要开始发的时候你会收到第一期："
+                         "UCP 版本变化、新部署的站点、以及和上一周的环比。",
+        "sub.desc_short": "225 家站扫描结果的每周摘要 —— 留下邮箱：",
+        "sub.placeholder": "you@your-store.com",
+        "sub.button": "订阅",
+        "sub.consent": "只用于发送摘要，不做追踪、不对外共享，随时可退订。",
+        "sub.ok": "收到了，已经记下。",
+        "sub.err_invalid": "这个邮箱地址看起来不对。",
+        "sub.err_rate": "操作太频繁，稍后再试。",
+        "sub.err_fail": "我这边出错了。稍后再试，或开个 issue 告诉我。",
 
         "dim.fetch": "agent 能否抓取",
         "dim.structured": "产品结构化数据",

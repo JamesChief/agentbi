@@ -26,22 +26,29 @@ import strings as S
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 BATCH = os.path.join(HERE, "batch.json")
+SUBSCRIBERS = os.path.join(HERE, "subscribers.jsonl")
 
 RATE_MAX = 10           # 每 IP 在窗口内的请求数
 RATE_WINDOW = 300
+SUB_RATE_MAX = 5        # 订阅比检测更容易被刷，单独一个更紧的桶
+SUB_RATE_WINDOW = 3600
 CACHE_TTL = 1800
 DOMAIN_COOLDOWN = 600   # 同一目标域名多久才真扫一次（别反复打同一个站）
 TRUSTED_PROXY_HOPS = 1  # 前面有 1 个可信反代（Caddy/nginx）
 
 _hits = {}
+_sub_hits = {}
 _cache = {}
 _domain_at = {}
 _lock = threading.Lock()
+_sub_lock = threading.Lock()           # 订阅文件单独一把锁，别和检测抢
 _sem = threading.Semaphore(6)          # 同时最多 6 个检测（I/O 密集，2 vCPU 够）
 _sem_wait = 2                          # 等不到位置就明确报忙，别让用户干等着转圈
 _LB = {"mtime": 0.0, "html": ""}       # 榜单渲染结果缓存：每次请求渲染 225 行没必要
 
 URL_RE = re.compile(r"^https?://[^\s<>\"]{4,200}$", re.I)
+# 刻意宽松：邮箱地址的合法形态太多，严格校验只会误杀。真正的确认是收信，不是正则。
+EMAIL_RE = re.compile(r"^[^@\s,;]{1,64}@[^@\s,;]+\.[^@\s,;.]{2,}$")
 
 
 def rate_ok(ip):
@@ -51,6 +58,18 @@ def rate_ok(ip):
         while q and now - q[0] > RATE_WINDOW:
             q.popleft()
         if len(q) >= RATE_MAX:
+            return False
+        q.append(now)
+        return True
+
+
+def sub_rate_ok(ip):
+    now = time.time()
+    with _lock:
+        q = _sub_hits.setdefault(ip, deque())
+        while q and now - q[0] > SUB_RATE_WINDOW:
+            q.popleft()
+        if len(q) >= SUB_RATE_MAX:
             return False
         q.append(now)
         return True
@@ -82,11 +101,45 @@ def lang_of(query, cookie):
     return v if v in S.LANGS else (cookie if cookie in S.LANGS else S.DEFAULT)
 
 
+def sub_block(lang, long_form):
+    """订阅框。长版（首页报告下方）带说明，短版（页脚 / 榜单页）一行。
+
+    两个版本用同一套 class，交给 web/sub.js 统一接管提交。
+    """
+    e = html.escape
+    # 注意：别用 .sub——那已经是站点副标题的 class（style.css）
+    desc = S.t("sub.desc_long" if long_form else "sub.desc_short", lang)
+    cls = "subscribe subscribe-long" if long_form else "subscribe subscribe-short"
+    head = f"<h3>{e(S.t('sub.title', lang))}</h3>" if long_form else ""
+    return (f"<div class='{cls}'>{head}"
+            f"<form class='subscribe-form' novalidate>"
+            f"<p class='subscribe-desc'>{e(desc)}</p>"
+            f"<input type='email' name='email' class='subscribe-email' "
+            f"placeholder=\"{e(S.t('sub.placeholder', lang))}\" autocomplete='email' required>"
+            f"<button type='submit'>{e(S.t('sub.button', lang))}</button>"
+            f"</form>"
+            f"<p class='subscribe-consent'>{e(S.t('sub.consent', lang))}</p>"
+            f"<p class='subscribe-msg' role='status'></p>"
+            f"</div>")
+
+
+def sub_script(lang):
+    """给 JS 用的订阅文案 + 处理脚本。
+
+    首页的 L 里已经含 sub.*（见 render_page 的 js_keys），这里只单独喂给榜单页——
+    榜单是 Python 直接拼出来的，不走 index.html 的模板。
+    """
+    keys = {k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items()
+            if k.startswith("sub.")}
+    return ("<script>window.__SUB_L=" + json.dumps(keys, ensure_ascii=False) + ";</script>"
+            "<script src='/sub.js' defer></script>")
+
+
 def render_page(name, lang):
     """静态页是模板：先填运行时值（语言、查询串、给 JS 用的文案），再套文案表。"""
     raw = open(os.path.join(WEB, name), encoding="utf-8").read()
     js_keys = {k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items()
-               if k.startswith(("dim.", "rep.", "pri.", "site."))}
+               if k.startswith(("dim.", "rep.", "pri.", "site.", "sub."))}
     vals = {
         "html.lang": lang,
         "qs": f"?lang={lang}" if lang != S.DEFAULT else "",
@@ -94,6 +147,8 @@ def render_page(name, lang):
         "json.lang": json.dumps(js_keys, ensure_ascii=False),
         "alt_href": "/?lang=zh" if lang == S.DEFAULT else "/",
         "alt_lang": "中文" if lang == S.DEFAULT else "English",
+        "sub_long": sub_block(lang, True),
+        "sub_short": sub_block(lang, False),
     }
     for k, v in vals.items():
         raw = raw.replace("{{" + k + "}}", str(v))
@@ -293,7 +348,9 @@ class H(SimpleHTTPRequestHandler):
                 f"<h1>{e(S.t('lb.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a></p>"
                 f"{render_leaderboard(lang)}"
+                f"{sub_block(lang, False)}"
                 f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"{sub_script(lang)}"
                 f"</body></html>").encode()
 
     def _qs(self, lang):
@@ -363,6 +420,55 @@ class H(SimpleHTTPRequestHandler):
             return self._send_page("about.html", lang)
 
         return super().do_GET()
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        if u.path != "/api/subscribe":
+            return self._json({"error": "not found"}, 404)
+        lang = self.lang()
+        ip = self.client_ip()
+
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > 4096:            # 一个邮箱地址不该超过这个数
+            return self._json({"error": S.t("sub.err_fail", lang)}, 400)
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+        try:
+            raw = self.rfile.read(length).decode("utf-8", "replace")
+            if ctype == "application/json":
+                email = (json.loads(raw).get("email") or "").strip().lower()
+            else:
+                email = (parse_qs(raw).get("email") or [""])[0].strip().lower()
+        except Exception:
+            email = ""
+
+        if not EMAIL_RE.match(email):
+            return self._json({"error": S.t("sub.err_invalid", lang)}, 400)
+        if not sub_rate_ok(ip):
+            return self._json({"error": S.t("sub.err_rate", lang)}, 429)
+
+        # 记邮箱 + 时间戳 + 来源 + 语言。**不记 IP**——订阅只需要这三样，
+        # 多记的每一条都是出事时要解释的东西。IP 只用于限流，用完即弃。
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "email": email, "src": (parse_qs(u.query).get("src") or [""])[0][:16],
+               "lang": lang}
+        try:
+            with _sub_lock:
+                seen = set()
+                if os.path.exists(SUBSCRIBERS):
+                    with open(SUBSCRIBERS, encoding="utf-8") as f:
+                        for line in f:
+                            try:
+                                seen.add(json.loads(line).get("email"))
+                            except Exception:
+                                pass
+                if email not in seen:
+                    with open(SUBSCRIBERS, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception:
+            return self._json({"error": S.t("sub.err_fail", lang)}, 500)
+
+        # 已订阅和首次订阅返回同一句：不泄露某个邮箱在不在库里
+        return self._json({"ok": True, "msg": S.t("sub.ok", lang)})
 
 
 if __name__ == "__main__":
