@@ -20,6 +20,10 @@ STR = {
         "site.button": "Scan",
         "site.scanning": "Scanning, 10–20 seconds…",
         "site.lb_link": "Leaderboard: 225 stores tested →",
+        "site.tr_link": "Trend",
+        "site.cr_link": "Crawlers",
+        "site.cat_link": "Categories",
+        "site.pr_link": "Signals",
         "site.checks": "Checks: can agents fetch you · product structured data · UCP deployment "
                        "and version · llms.txt · robots. Open source and reproducible:",
         "site.about_link": "How we crawl / how to opt out",
@@ -106,6 +110,133 @@ STR = {
         "lb.no_data": "No leaderboard data yet",
         "lb.dash": "—",
 
+        # ---- /trend 历史趋势（板块 2）------------------------------------
+        # 文案原则：每一句都能被直接引用，所以必须自带日期 / 样本量 / 口径。
+        "tr.title": "Agent-readiness trend",
+        "tr.desc": "Daily agent-readiness snapshots of the same stores: average score, UCP "
+                   "deployment, and day-over-day movers. One scan per day, no JS rendering.",
+        "tr.back": "← Scan your site",
+        "tr.intro": "The same {n} stores, re-scanned once a day. This is the part of AgentBI "
+                    "that only gets more valuable with time — a day of history cannot be "
+                    "backfilled.",
+        "tr.h_series": "Daily snapshots",
+        "tr.h_movers": "Biggest movers ({pdate} → {date})",
+        "tr.th_date": "Date",
+        "tr.th_avg": "Avg score",
+        "tr.th_reach": "Evaluable",
+        "tr.th_ucp": "UCP deployed",
+        "tr.th_delta": "Change",
+        "tr.none": "None in this window.",
+        "tr.up": "Improved",
+        "tr.down": "Declined",
+        "tr.no_prev": "Only one snapshot so far. Movers need at least two days of history — "
+                      "this page fills in on its own from here.",
+        "tr.no_data": "No history yet.",
+        "tr.method": "Method and limitations (read before quoting)",
+        "tr.m1": "Each row is one daily snapshot of the same {n} stores, scanned once per day "
+                 "at about 03:30 CST, no JS rendering.",
+        "tr.m2": "<b>Avg score</b> covers evaluable stores only (homepage returned 200). The "
+                 "evaluable count moves day to day with WAF blocks, so quote an avg score "
+                 "together with its date and sample size.",
+        "tr.m3": "A 403 is <b>our</b> egress reputation, not the store's configuration. A "
+                 "store blocked today may score again tomorrow — read the series as a trend, "
+                 "not a verdict on any single store.",
+        "tr.m4": "Scoring is <b>heuristic</b>: it checks that a UCP manifest exists and its "
+                 "version, it does not place a real order.",
+        "tr.api_note": "Per-store history is available as JSON: "
+                       "<code>/api/site-history?site=https://example.com</code>",
+        # ---- /crawlers 爬虫准入普查（板块 4）------------------------------
+        "cr.title": "AI crawler access census",
+        "cr.desc": "How many retailers block each AI crawler in robots.txt. Same {n} stores, "
+                   "re-scanned daily.",
+        "cr.intro": "robots.txt is where a store decides whether AI crawlers may read it. This "
+                    "counts <code>Disallow: /</code> rules per crawler across {n} stores "
+                    "({m} of them publish a robots.txt).",
+        "cr.th_agent": "Crawler",
+        "cr.th_blocked": "Blocked by",
+        "cr.th_pct": "Share",
+        "cr.wildcard": "Stores that disallow <code>/</code> for <code>*</code> "
+                       "(this blocks every crawler, AI or not): <b>{n}</b>",
+        "cr.detail": "Which store blocks which crawler",
+        "cr.th_blocked_list": "Blocked crawlers",
+        "cr.none": "No store in this sample publishes a block for any tracked crawler.",
+        "cr.method": "Method and limitations (read before quoting)",
+        "cr.m1": "Counts <code>Disallow: /</code> rules matched to {k} known AI crawler tokens "
+                 "in each store's robots.txt. Snapshot <b>{date}</b>.",
+        "cr.m2": "A block in robots.txt is a <b>stated rule, not observed behaviour</b> — some "
+                 "stores that allow crawlers still block them at the WAF, and a 403 in our "
+                 "scanner is our egress reputation, not their rule.",
+        "cr.m3": "Stores without a robots.txt are excluded from the denominator: no file means "
+                 "allow by default, not a block.",
+        "cr.m4": "Re-scanned daily, so these counts move as stores edit their files. Quote with "
+                 "the snapshot date.",
+        # ---- /protocols 信号采用度（板块 3）------------------------------
+        # 与 leaderboard 的分工：榜单是 UCP 端点分桶普查 + 打分明细；
+        # 这一页回答"这些信号各自有多少站有，以及全部具备的有多稀少"。
+        "pr.title": "Agent-readiness signals",
+        "pr.desc": "What share of stores actually publish each machine-readable signal — UCP, "
+                   "llms.txt, product structured data — and how few publish all of them.",
+        "pr.intro": "Across {n} evaluable stores in the {date} snapshot. Publishing one signal "
+                    "does not make a store usable to an agent, so the last line is the one "
+                    "that matters.",
+        "pr.th_signal": "Signal",
+        "pr.th_n": "Stores",
+        "pr.th_pct": "Share",
+        "pr.s_ucp": "UCP manifest deployed",
+        "pr.s_llms": "llms.txt present",
+        "pr.s_jsonld": "Product JSON-LD",
+        "pr.s_price": "…with price",
+        "pr.s_availability": "…with availability",
+        "pr.s_robots_ok": "robots.txt blocks no AI crawler",
+        "pr.all_title": "Stores with every signal",
+        "pr.all_note": "Only <b>{n}</b> of {reach} stores ({pct}) publish all {k} signals. "
+                       "Everything else is partial.",
+        "pr.h_series": "How these shares moved",
+        "pr.method": "Method and limitations (read before quoting)",
+        "pr.m1": "Signals are read from each store's homepage and <code>/.well-known/</code> "
+                 "paths. Snapshot <b>{date}</b>, no JS rendering.",
+        "pr.m2": "Denominator is <b>evaluable stores only</b> (homepage returned 200): {reach} "
+                 "of {n} scanned. The remainder are WAF blocks, not failures.",
+        "pr.m3": "UCP versions and services are near-identical across stores because platforms "
+                 "generate them, so counting who has it is meaningful and comparing versions "
+                 "is not.",
+        "pr.m4": "robots.txt is a stated rule, not observed behaviour, and not every snapshot "
+                 "carries it — older days may show a gap.",
+        # ---- /categories 分品类基准（板块 1）------------------------------
+        "cat.title": "Agent readiness by category",
+        "cat.desc": "Average agent-readiness score, UCP and llms.txt adoption, split by retail "
+                    "category. Same {n} stores, re-scanned daily.",
+        "cat.intro": "Every store in the list is assigned one category by hand. Categories with "
+                     "fewer than 10 evaluable stores are shown but should not be quoted as a "
+                     "category benchmark.",
+        "cat.th_cat": "Category",
+        "cat.th_reach": "Evaluable",
+        "cat.th_avg": "Avg score",
+        "cat.th_ucp": "UCP",
+        "cat.th_llms": "llms.txt",
+        "cat.th_all": "All signals",
+        "cat.c_apparel": "Apparel",
+        "cat.c_shoes": "Shoes",
+        "cat.c_beauty": "Beauty & personal care",
+        "cat.c_home": "Home & furniture",
+        "cat.c_electronics": "Electronics",
+        "cat.c_outdoor": "Outdoor & sport",
+        "cat.c_food": "Food & drink",
+        "cat.c_accessories": "Accessories",
+        "cat.c_underwear": "Underwear & socks",
+        "cat.c_retail": "Large retailers & marketplaces",
+        "cat.c_other": "Other",
+        "cat.small": "small sample",
+        "cat.method": "Method and limitations (read before quoting)",
+        "cat.m1": "Categories are assigned <b>by hand</b> from each store's domain and brand "
+                  "(<code>categories.py</code>), snapshot <b>{date}</b>. They are a judgement "
+                  "call, not a taxonomy from the stores themselves.",
+        "cat.m2": "Denominator is evaluable stores (homepage returned 200), which differs per "
+                  "category. Rows marked <i>small sample</i> have fewer than 10 and should not "
+                  "be quoted as a benchmark.",
+        "cat.m3": "Large retailers and marketplaces are kept in their own row on purpose: they "
+                  "sell every category, so mixing them into category rows would distort both.",
+
         # UCP 端点普查：与首页可达性解耦，按 #867 的 reporting frame 分桶
         "lb.h_census": "UCP endpoint census",
         "lb.census_note": "Counts responses to <code>/.well-known/ucp</code> only, "
@@ -117,6 +248,8 @@ STR = {
         "lb.th_bucket": "Response",
         "lb.b_pos": "200 + parses → positive",
         "lb.b_noparse": "200 but does not parse (could not ask)",
+        "lb.b_3xx": "3xx at profile path (not followed)",
+        "lb.b_robots": "refused by robots.txt (not requested)",
         "lb.b_404": "404",
         "lb.b_410": "410 Gone",
         "lb.b_403": "403 (refused to us)",
@@ -268,6 +401,10 @@ STR = {
         "site.button": "检测",
         "site.scanning": "检测中，约需 10–20 秒…",
         "site.lb_link": "查看榜单（225 家电商站实测）→",
+        "site.tr_link": "趋势",
+        "site.cr_link": "爬虫",
+        "site.cat_link": "品类",
+        "site.pr_link": "信号",
         "site.checks": "检测项：agent 能否抓取 · 产品结构化数据 · UCP 部署与版本 · llms.txt · "
                        "robots。工具开源，数据可复现：",
         "site.about_link": "我们怎么抓站 / 如何让我们不抓你",
@@ -347,6 +484,112 @@ STR = {
         "lb.no_data": "还没有榜单数据",
         "lb.dash": "—",
 
+        # ---- /trend 历史趋势（板块 2）------------------------------------
+        "tr.title": "AI 就绪度趋势",
+        "tr.desc": "同一批站点的每日 AI 就绪度快照：平均分、UCP 部署情况、以及日间变化榜。"
+                   "每天扫一遍，不做 JS 渲染。",
+        "tr.back": "← 检测我的站点",
+        "tr.intro": "同一批 {n} 个站点，每天重新扫一遍。这是 AgentBI 里唯一随时间自动增值的部分——"
+                    "少一天历史，就永远补不回来。",
+        "tr.h_series": "每日快照",
+        "tr.h_movers": "变化最大（{pdate} → {date}）",
+        "tr.th_date": "日期",
+        "tr.th_avg": "平均分",
+        "tr.th_reach": "可评估",
+        "tr.th_ucp": "已部署 UCP",
+        "tr.th_delta": "变化",
+        "tr.none": "本区间无。",
+        "tr.up": "进步",
+        "tr.down": "退步",
+        "tr.no_prev": "目前只有一个快照。变化榜需要至少两天的历史——这个页面会从这里开始自己填满。",
+        "tr.no_data": "还没有历史数据。",
+        "tr.method": "方法与局限（引用前请先读）",
+        "tr.m1": "每一行是同一批 {n} 个站点的一次每日快照，约每天 03:30 CST 扫一遍，不做 JS 渲染。",
+        "tr.m2": "<b>平均分</b>只统计可评估站点（首页返回 200）。可评估数量每天会随 WAF 拦截波动，"
+                 "引用平均分时请连它的日期与样本量一起给出。",
+        "tr.m3": "403 是<b>我们</b>出口 IP 的信誉问题，不是站点配置有问题。今天被拦的站点明天可能又评上了"
+                 "——请把这条序列当趋势读，不要当对某个单站的结论。",
+        "tr.m4": "评分是<b>启发式</b>的：只检查 UCP manifest 是否存在及其版本，不会真的下单。",
+        "tr.api_note": "单站历史提供 JSON 接口："
+                       "<code>/api/site-history?site=https://example.com</code>",
+        # ---- /crawlers 爬虫准入普查（板块 4）------------------------------
+        "cr.title": "AI 爬虫准入普查",
+        "cr.desc": "多少零售站在 robots.txt 里封锁了各个 AI 爬虫。同一批 {n} 个站点，每天重扫。",
+        "cr.intro": "robots.txt 是一家店决定「要不要让 AI 爬虫读」的地方。这里统计同一批 {n} 个站点"
+                    "（其中 {m} 个提供了 robots.txt）里，各爬虫被 <code>Disallow: /</code> 的次数。",
+        "cr.th_agent": "爬虫",
+        "cr.th_blocked": "被封锁于",
+        "cr.th_pct": "占比",
+        "cr.wildcard": "有 <b>{n}</b> 个站对 <code>*</code> 写了 <code>Disallow: /</code>——"
+                       "那会拦掉所有爬虫，不只是 AI。",
+        "cr.detail": "哪些站封锁了哪些爬虫",
+        "cr.th_blocked_list": "被封锁的爬虫",
+        "cr.none": "本批样本里没有任何一个站对受追踪的爬虫写了封锁规则。",
+        "cr.method": "方法与局限（引用前请先读）",
+        "cr.m1": "统计每个站 robots.txt 里匹配 {k} 个已知 AI 爬虫 token 的 <code>Disallow: /</code> "
+                 "规则。快照日期 <b>{date}</b>。",
+        "cr.m2": "robots.txt 里的封锁是<b>书面规则，不是实测行为</b>——有些站虽然允许，WAF 照样拦；"
+                 "而扫描器遇到的 403 是我们出口 IP 的信誉问题，不是对方的规则。",
+        "cr.m3": "没有 robots.txt 的站不计入分母：没有文件等于默认放行，不等于封锁。",
+        "cr.m4": "每天重扫，这些数字会随各站改文件而变。引用时请带上快照日期。",
+        # ---- /protocols 信号采用度（板块 3）------------------------------
+        "pr.title": "AI 就绪信号采用度",
+        "pr.desc": "多少站真正发布了各项机器可读信号——UCP、llms.txt、商品结构化数据——"
+                   "以及同时具备全部的有多稀少。",
+        "pr.intro": "基于 {date} 快照里 {n} 个可评估站点。只发布其中一项，对 agent 来说仍然不可用，"
+                    "所以最后一行才是关键。",
+        "pr.th_signal": "信号",
+        "pr.th_n": "站数",
+        "pr.th_pct": "占比",
+        "pr.s_ucp": "已部署 UCP manifest",
+        "pr.s_llms": "存在 llms.txt",
+        "pr.s_jsonld": "商品 JSON-LD",
+        "pr.s_price": "…含 price",
+        "pr.s_availability": "…含 availability",
+        "pr.s_robots_ok": "robots.txt 未封锁任何 AI 爬虫",
+        "pr.all_title": "具备全部信号的站点",
+        "pr.all_note": "{reach} 个站里只有 <b>{n}</b> 个（{pct}）同时发布了全部 {k} 项信号，"
+                       "其余都是部分具备。",
+        "pr.h_series": "这些占比怎么变的",
+        "pr.method": "方法与局限（引用前请先读）",
+        "pr.m1": "信号读自各站首页与 <code>/.well-known/</code> 路径。快照 <b>{date}</b>，"
+                 "不做 JS 渲染。",
+        "pr.m2": "分母<b>只含可评估站点</b>（首页返回 200）：扫描 {n} 个里的 {reach} 个。"
+                 "其余是 WAF 拦截，不算失败。",
+        "pr.m3": "各站的 UCP 版本与 services 几乎一模一样，因为是平台生成的——"
+                 "所以统计「谁有」有意义，比较版本没有。",
+        "pr.m4": "robots.txt 是书面规则，不是实测行为；而且并非每个快照都带这个字段，"
+                 "较早的日期可能显示为空白。",
+        # ---- /categories 分品类基准（板块 1）------------------------------
+        "cat.title": "分品类 AI 就绪度基准",
+        "cat.desc": "按零售品类拆分的平均分、UCP 与 llms.txt 采用率。同一批 {n} 个站点，每天重扫。",
+        "cat.intro": "清单里每个站的品类是<b>人工判定</b>的。可评估站点不足 10 个的品类照样列出，"
+                     "但不该当作品类基准来引用。",
+        "cat.th_cat": "品类",
+        "cat.th_reach": "可评估",
+        "cat.th_avg": "平均分",
+        "cat.th_ucp": "UCP",
+        "cat.th_llms": "llms.txt",
+        "cat.th_all": "全信号",
+        "cat.c_apparel": "服装",
+        "cat.c_shoes": "鞋",
+        "cat.c_beauty": "美妆个护",
+        "cat.c_home": "家居家具",
+        "cat.c_electronics": "3C 电子",
+        "cat.c_outdoor": "户外运动",
+        "cat.c_food": "食品饮料",
+        "cat.c_accessories": "配件",
+        "cat.c_underwear": "内衣袜",
+        "cat.c_retail": "大型零售商与平台",
+        "cat.c_other": "其他",
+        "cat.small": "样本小",
+        "cat.method": "方法与局限（引用前请先读）",
+        "cat.m1": "品类是依据各站域名与品牌<b>人工判定</b>的（见 <code>categories.py</code>），"
+                  "快照 <b>{date}</b>。这是判断，不是站点自己申报的分类。",
+        "cat.m2": "分母是可评估站点（首页返回 200），各类目不同。标注<i>样本小</i>的行不足 10 个，"
+                  "不该当基准引用。",
+        "cat.m3": "大型零售商与平台单独成行，是刻意的：它们什么品类都卖，混进品类行会两边都失真。",
+
         # UCP 端点普查：与首页可达性解耦，按 #867 的 reporting frame 分桶
         "lb.h_census": "UCP 端点普查",
         "lb.census_note": "只统计 <code>/.well-known/ucp</code> 的响应，"
@@ -358,6 +601,8 @@ STR = {
         "lb.th_bucket": "响应",
         "lb.b_pos": "200 且可解析 → 阳性",
         "lb.b_noparse": "200 但解析不了（无法询问）",
+        "lb.b_3xx": "profile 路径返回 3xx（未跟随）",
+        "lb.b_robots": "被 robots.txt 拒绝（未发起请求）",
         "lb.b_404": "404",
         "lb.b_410": "410 Gone",
         "lb.b_403": "403（拒绝我们）",

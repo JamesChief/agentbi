@@ -21,6 +21,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import agentbi as A
+import categories as C
 import strings as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -213,8 +214,16 @@ def render_leaderboard(lang=S.DEFAULT):
         s = r.get("ucp_status")
         if r.get("ucp"):
             return "pos"
+        # 被 robots 拒绝的单独成桶：这不是"没部署"也不是"连不上"，
+        # #867 的 frame 要求把 robots refusals 单独计数。
+        if r.get("ucp_robots_refused"):
+            return "robots"
         if s == 200:
             return "noparse"
+        # 3xx 单独成桶：规范说 profile 端点 MUST NOT 用重定向、实现 MUST NOT 跟随
+        # （ucp#904，frmoretto）。跟随了就分不清"部署了但重定向"和"没部署"。
+        if 300 <= (s or 0) < 400:
+            return "3xx"
         if s == 404:
             return "404"
         if s == 410:
@@ -227,7 +236,9 @@ def render_leaderboard(lang=S.DEFAULT):
             return "err"
         return "other"
 
-    order = [("pos", "b_pos"), ("noparse", "b_noparse"), ("404", "b_404"),
+    order = [("pos", "b_pos"), ("noparse", "b_noparse"), ("3xx", "b_3xx"),
+             ("robots", "b_robots"),
+             ("404", "b_404"),
              ("410", "b_410"), ("403", "b_403"), ("rate", "b_rate"),
              ("err", "b_err"), ("other", "b_other")]
     buckets = {}
@@ -340,6 +351,393 @@ def render_leaderboard(lang=S.DEFAULT):
     return _LB[lang]
 
 
+# ---- /trend 历史趋势（板块 2）--------------------------------------------
+# 战略：AgentBI 转为长期内容资产，历史序列是唯一"时间买不到"的资产。
+# 所以这里只做聚合（可被引用的一句话数字），不生成 225 个单站静态页——
+# 单站历史走 /api/site-history，等数据攒够再决定要不要生成页面。
+_HIST = os.path.join(HERE, "history")
+_TR = {}                                  # {lang: (mtime, html)}
+
+
+def _hist_mtime():
+    if not os.path.isdir(_HIST):
+        return 0.0
+    try:
+        return max(os.path.getmtime(os.path.join(_HIST, f))
+                   for f in os.listdir(_HIST))
+    except (ValueError, OSError):
+        return 0.0
+
+
+def _all_snapshots():
+    """history/ 下全部每日快照，按日期升序。
+
+    单个文件读坏就跳过——别让一个坏快照把整页拖挂。
+    """
+    if not os.path.isdir(_HIST):
+        return []
+    out = []
+    for f in sorted(os.listdir(_HIST)):
+        if not (f.startswith("batch-") and f.endswith(".json")):
+            continue
+        try:
+            data = json.load(open(os.path.join(_HIST, f), encoding="utf-8"))
+        except Exception:
+            continue
+        out.append((f[len("batch-"):-len(".json")], data))
+    return out
+
+
+def _snapshot_stats(data):
+    """一个快照的三个可引用数字：平均分 / 可评估数 / 已部署 UCP 数。"""
+    rows = [r for r in data.get("rows", []) if not r.get("error")]
+    reach = [r for r in rows if r.get("home_status") == 200]
+    scores = [r["score"] for r in reach if isinstance(r.get("score"), int)]
+    avg = round(sum(scores) / len(scores)) if scores else None
+    return avg, len(reach), sum(1 for r in reach if r.get("ucp"))
+
+
+def _score_map(data):
+    return {r["site"]: r["score"] for r in data.get("rows", [])
+            if not r.get("error") and r.get("home_status") == 200
+            and isinstance(r.get("score"), int)}
+
+
+def _hist_movers(cur, prev, n=10):
+    """进步/退步 Top n。只比两边都可评估的站——否则会把 WAF 波动当成真实变化。"""
+    a, b = _score_map(prev), _score_map(cur)
+    both = set(a) & set(b)
+    diffs = [(b[s] - a[s], s, a[s], b[s]) for s in both]
+    up = sorted([d for d in diffs if d[0] > 0], key=lambda x: -x[0])[:n]
+    down = sorted([d for d in diffs if d[0] < 0], key=lambda x: x[0])[:n]
+    return up, down
+
+
+def render_trend(lang=S.DEFAULT):
+    e = html.escape
+    snaps = _all_snapshots()
+    if not snaps:
+        return f"<p>{e(S.t('tr.no_data', lang))}</p>"
+    mt = _hist_mtime()
+    cached = _TR.get(lang)
+    if cached and cached[0] == mt:
+        return cached[1]
+
+    n_sites = len(snaps[-1][1].get("rows", []))
+    L = [f"<p class='note'>{S.t('tr.intro', lang, n=n_sites)}</p>"]
+
+    # ---- 1. 每日快照序列 ----
+    L.append(f"<h2>{e(S.t('tr.h_series', lang))}</h2>")
+    L.append("<table><tr>"
+             f"<th>{e(S.t('tr.th_date', lang))}</th>"
+             f"<th>{e(S.t('tr.th_avg', lang))}</th>"
+             f"<th>{e(S.t('tr.th_reach', lang))}</th>"
+             f"<th>{e(S.t('tr.th_ucp', lang))}</th></tr>")
+    for date, data in snaps:                      # 升序：序列要能一眼读出走向
+        avg, reach, ucp = _snapshot_stats(data)
+        L.append(f"<tr><td>{e(date)}</td><td>{avg if avg is not None else '—'}</td>"
+                 f"<td>{reach}</td><td>{ucp}</td></tr>")
+    L.append("</table>")
+
+    # ---- 2. 变化榜 ----
+    if len(snaps) >= 2:
+        cdate, cur = snaps[-1]
+        pdate, prev = snaps[-2]
+        up, down = _hist_movers(cur, prev)
+        L.append(f"<h2>{e(S.t('tr.h_movers', lang, pdate=pdate, date=cdate))}</h2>")
+        for label, rows in ((S.t("tr.up", lang), up), (S.t("tr.down", lang), down)):
+            L.append(f"<h3>{e(label)}</h3>")
+            if not rows:
+                L.append(f"<p class='note'>{e(S.t('tr.none', lang))}</p>")
+                continue
+            L.append("<table><tr>"
+                     f"<th>{e(S.t('lb.th_site', lang))}</th>"
+                     f"<th>{e(S.t('tr.th_delta', lang))}</th></tr>")
+            for d, site, old, new in rows:
+                L.append(f"<tr><td>{e(site.replace('https://', ''))}</td>"
+                         f"<td>{old} → {new} ({'+' if d > 0 else ''}{d})</td></tr>")
+            L.append("</table>")
+    else:
+        L.append(f"<p class='note'>{e(S.t('tr.no_prev', lang))}</p>")
+
+    # ---- 3. 方法与局限（每条数据要可引用就必须带这三要素）----
+    L.append(f"<h2>{e(S.t('tr.method', lang))}</h2><ul>")
+    for k in ("m1", "m2", "m3", "m4"):
+        L.append("<li>" + S.t(f"tr.{k}", lang, n=n_sites) + "</li>")
+    L.append("</ul>")
+    L.append(f"<p class='note'>{S.t('tr.api_note', lang)}</p>")
+
+    body = "\n".join(L)
+    _TR[lang] = (mt, body)
+    return body
+
+
+# ---- /crawlers 爬虫准入普查（板块 4）--------------------------------------
+# 数据源是 robots.txt 的 stated rule，不是实测行为——这个区别必须写在页面上，
+# 否则引用方会把"写了规则"当成"真的能抓到"。
+_CR = {}
+
+
+def render_crawlers(lang=S.DEFAULT):
+    e = html.escape
+    if not os.path.exists(BATCH):
+        return f"<p>{e(S.t('lb.no_data', lang))}</p>"
+    mt = os.path.getmtime(BATCH)
+    cached = _CR.get(lang)
+    if cached and cached[0] == mt:
+        return cached[1]
+
+    data = json.load(open(BATCH))
+    rows = [r for r in data.get("rows", []) if not r.get("error")]
+    date = (str(data.get("generated_at") or ""))[:10]
+    with_rb = [r for r in rows if r.get("robots_present")]
+    n, m = len(rows), len(with_rb)
+
+    counts = {}
+    for r in with_rb:
+        for a in (r.get("robots_blocked") or []):
+            counts[a] = counts.get(a, 0) + 1
+    wildcard = sum(1 for r in with_rb if r.get("robots_wildcard"))
+    denom = m or 1                                 # 没有 robots.txt 的站不计入分母
+
+    L = [f"<p class='note'>{S.t('cr.intro', lang, n=n, m=m)}</p>"]
+
+    L.append("<table><tr>"
+             f"<th>{e(S.t('cr.th_agent', lang))}</th>"
+             f"<th>{e(S.t('cr.th_blocked', lang))}</th>"
+             f"<th>{e(S.t('cr.th_pct', lang))}</th></tr>")
+    # 全部 token 都列出来（包括 0）——"没人拦 GPTBot"本身也是一条可引用的信息
+    for tok in sorted(A.AGENT_TOKENS, key=lambda t: (-counts.get(t, 0), t)):
+        c = counts.get(tok, 0)
+        L.append(f"<tr><td><code>{e(tok)}</code></td><td>{c}</td>"
+                 f"<td>{c / denom:.1%}</td></tr>")
+    L.append("</table>")
+    if wildcard:
+        L.append(f"<p class='note'>{S.t('cr.wildcard', lang, n=wildcard)}</p>")
+
+    # 明细：哪些站拦了哪些
+    blocked_rows = [r for r in with_rb if r.get("robots_blocked")]
+    L.append(f"<h2>{e(S.t('cr.detail', lang))}</h2>")
+    if not blocked_rows:
+        L.append(f"<p class='note'>{e(S.t('cr.none', lang))}</p>")
+    else:
+        L.append("<table><tr>"
+                 f"<th>{e(S.t('lb.th_site', lang))}</th>"
+                 f"<th>{e(S.t('cr.th_blocked_list', lang))}</th></tr>")
+        for r in sorted(blocked_rows, key=lambda r: -len(r.get("robots_blocked") or [])):
+            L.append(f"<tr><td>{e(r['site'].replace('https://', ''))}</td>"
+                     f"<td>{e(', '.join(r.get('robots_blocked') or []))}</td></tr>")
+        L.append("</table>")
+
+    L.append(f"<h2>{e(S.t('cr.method', lang))}</h2><ul>")
+    L.append("<li>" + S.t("cr.m1", lang, k=len(A.AGENT_TOKENS), date=date) + "</li>")
+    for k in ("m2", "m3", "m4"):
+        L.append("<li>" + S.t(f"cr.{k}", lang) + "</li>")
+    L.append("</ul>")
+
+    body = "\n".join(L)
+    _CR[lang] = (mt, body)
+    return body
+
+
+# ---- /protocols 信号采用度（板块 3）----------------------------------------
+# 与 /leaderboard 的分工：榜单是 UCP 端点分桶普查 + 逐站打分；
+# 这一页回答"各项信号各自有多少站有，以及**全部具备**的有多稀少"。
+# 最后那个"全具备"的数字才是真正可引用的一句。
+_PR = {}
+
+# (key, 依赖字段, 判定)。依赖字段用于判断老快照能不能算这一项。
+_SIGNALS = (
+    ("ucp", "ucp", lambda r: bool(r.get("ucp"))),
+    ("llms", "llms", lambda r: bool(r.get("llms"))),
+    ("jsonld", "product_jsonld", lambda r: bool(r.get("product_jsonld"))),
+    ("price", "price", lambda r: bool(r.get("price"))),
+    ("availability", "availability", lambda r: bool(r.get("availability"))),
+    ("robots_ok", "robots_present",
+     lambda r: bool(r.get("robots_present")) and not (r.get("robots_blocked") or [])),
+)
+
+
+def _signal_counts(data):
+    """一个快照里各项信号的站数。老快照缺字段的那项返回 None（未知，不是 0）。"""
+    rows = [r for r in data.get("rows", []) if not r.get("error")]
+    reach = [r for r in rows if r.get("home_status") == 200]
+    out = {"reach": len(reach), "scanned": len(rows)}
+    # 老快照可能没有某个字段（如 robots_present 是后来加的），缺的那项记 None：
+    # "未知"不能显示成 0，否则看起来像"没有站满足条件"。
+    computable = [k for k, field, _ in _SIGNALS if reach and field in reach[0]]
+    out["computable"] = computable
+    for k, field, fn in _SIGNALS:
+        out[k] = sum(1 for r in reach if fn(r)) if k in computable else None
+    # "全具备"只按能算的项统计，否则老快照会一律显示 0
+    out["all"] = sum(1 for r in reach
+                     if all(fn(r) for k, _, fn in _SIGNALS if k in computable))
+    out["all_of"] = len(computable)
+    return out
+
+
+def render_protocols(lang=S.DEFAULT):
+    e = html.escape
+    snaps = _all_snapshots()
+    if not snaps:
+        return f"<p>{e(S.t('tr.no_data', lang))}</p>"
+    mt = _hist_mtime()
+    cached = _PR.get(lang)
+    if cached and cached[0] == mt:
+        return cached[1]
+
+    date, cur = snaps[-1]
+    c = _signal_counts(cur)
+    reach = c["reach"] or 1
+    L = [f"<p class='note'>{S.t('pr.intro', lang, n=c['reach'], date=date)}</p>"]
+
+    L.append("<table><tr>"
+             f"<th>{e(S.t('pr.th_signal', lang))}</th>"
+             f"<th>{e(S.t('pr.th_n', lang))}</th>"
+             f"<th>{e(S.t('pr.th_pct', lang))}</th></tr>")
+    for k, _, _ in _SIGNALS:
+        v = c.get(k)
+        L.append(f"<tr><td>{e(S.t('pr.s_' + k, lang))}</td>"
+                 f"<td>{v if v is not None else '—'}</td>"
+                 f"<td>{f'{v / reach:.1%}' if v is not None else '—'}</td></tr>")
+    L.append("</table>")
+
+    L.append(f"<h2>{e(S.t('pr.all_title', lang))}</h2>")
+    note = S.t("pr.all_note", lang, n=c["all"], reach=c["reach"],
+               pct=f"{c['all'] / reach:.1%}", k=c["all_of"])
+    L.append(f"<p class='note'>{note}</p>")
+
+    # 序列：各信号随时间的变化（分母每天会变，所以给占比而不是绝对值）
+    if len(snaps) >= 2:
+        L.append(f"<h2>{e(S.t('pr.h_series', lang))}</h2>")
+        L.append("<table><tr>"
+                 f"<th>{e(S.t('tr.th_date', lang))}</th>"
+                 f"<th>{e(S.t('tr.th_reach', lang))}</th>")
+        for k, _, _ in _SIGNALS:
+            L.append(f"<th>{e(S.t('pr.s_' + k, lang))}</th>")
+        L.append("</tr>")
+        for d, data in snaps:
+            cc = _signal_counts(data)
+            den = cc["reach"] or 1
+            L.append(f"<tr><td>{e(d)}</td><td>{cc['reach']}</td>")
+            for k, _, _ in _SIGNALS:
+                v = cc.get(k)
+                L.append(f"<td>{f'{v / den:.0%}' if v is not None else '—'}</td>")
+            L.append("</tr>")
+        L.append("</table>")
+
+    L.append(f"<h2>{e(S.t('pr.method', lang))}</h2><ul>")
+    L.append("<li>" + S.t("pr.m1", lang, date=date) + "</li>")
+    L.append("<li>" + S.t("pr.m2", lang, reach=c["reach"], n=c["scanned"]) + "</li>")
+    for k in ("m3", "m4"):
+        L.append("<li>" + S.t(f"pr.{k}", lang) + "</li>")
+    L.append("</ul>")
+
+    body = "\n".join(L)
+    _PR[lang] = (mt, body)
+    return body
+
+
+def _full_count(reach):
+    """一组站点里"全部信号都具备"的数量。返回 (数量, 参与统计的信号数)。
+
+    老快照缺字段时只按能算的项统计，否则会一律显示 0。
+    """
+    if not reach:
+        return 0, 0
+    computable = [k for k, field, _ in _SIGNALS if field in reach[0]]
+    n = sum(1 for r in reach
+            if all(fn(r) for k, _, fn in _SIGNALS if k in computable))
+    return n, len(computable)
+
+
+# ---- /categories 分品类基准（板块 1）----------------------------------------
+# 品类是人工判定的（categories.py），这点必须在页面上写清楚：
+# 不写明的话，别人会把"我们猜的品类"当成"站点自己申报的分类"来引用。
+_CAT = {}
+
+
+def render_categories(lang=S.DEFAULT):
+    e = html.escape
+    snaps = _all_snapshots()
+    if not snaps:
+        return f"<p>{e(S.t('tr.no_data', lang))}</p>"
+    mt = _hist_mtime()
+    cached = _CAT.get(lang)
+    if cached and cached[0] == mt:
+        return cached[1]
+
+    date, data = snaps[-1]
+    rows = [r for r in data.get("rows", []) if not r.get("error")]
+    groups = {}
+    for r in rows:
+        groups.setdefault(C.categorize(r["site"]), []).append(r)
+
+    L = [f"<p class='note'>{S.t('cat.intro', lang)}</p>"]
+    L.append("<table><tr>"
+             f"<th>{e(S.t('cat.th_cat', lang))}</th>"
+             f"<th>{e(S.t('cat.th_reach', lang))}</th>"
+             f"<th>{e(S.t('cat.th_avg', lang))}</th>"
+             f"<th>{e(S.t('cat.th_ucp', lang))}</th>"
+             f"<th>{e(S.t('cat.th_llms', lang))}</th>"
+             f"<th>{e(S.t('cat.th_all', lang))}</th></tr>")
+
+    stats = []
+    for cat, g in groups.items():
+        reach = [r for r in g if r.get("home_status") == 200]
+        scores = [r["score"] for r in reach if isinstance(r.get("score"), int)]
+        avg = round(sum(scores) / len(scores)) if scores else None
+        full, n_sig = _full_count(reach)
+        stats.append((cat, len(g), len(reach), avg,
+                      sum(1 for r in reach if r.get("ucp")),
+                      sum(1 for r in reach if r.get("llms")), full, n_sig))
+
+    for cat, n, reach, avg, ucp, llms, full, n_sig in sorted(
+            stats, key=lambda x: (-(x[3] if x[3] is not None else -1), -x[2])):
+        den = reach or 1
+        small = f" <i>({e(S.t('cat.small', lang))})</i>" if reach < 10 else ""
+        L.append(f"<tr><td>{e(S.t('cat.c_' + cat, lang))}{small}</td>"
+                 f"<td>{reach}</td>"
+                 f"<td>{avg if avg is not None else '—'}</td>"
+                 f"<td>{ucp / den:.0%}</td>"
+                 f"<td>{llms / den:.0%}</td>"
+                 f"<td>{full / den:.0%}</td></tr>")
+    L.append("</table>")
+
+    L.append(f"<h2>{e(S.t('cat.method', lang))}</h2><ul>")
+    L.append("<li>" + S.t("cat.m1", lang, date=date) + "</li>")
+    L.append("<li>" + S.t("cat.m2", lang) + "</li>")
+    L.append("<li>" + S.t("cat.m3", lang) + "</li>")
+    L.append("</ul>")
+
+    body = "\n".join(L)
+    _CAT[lang] = (mt, body)
+    return body
+
+
+def _site_history(site):
+    """单站历史，按日期升序。
+
+    匹配要宽容：用户会输入 allbirds.com / www.allbirds.com / https://www.allbirds.com/，
+    这三种都得命中同一个站，否则接口看起来像坏了。
+    """
+    def norm(s):
+        s = (s or "").strip().rstrip("/").replace("https://", "").replace("http://", "")
+        return s.lower()
+    target = norm(site)
+    if not target:
+        return []
+    wanted = {target, "www." + target, target[4:] if target.startswith("www.") else target}
+    out = []
+    for date, data in _all_snapshots():
+        for r in data.get("rows", []):
+            if norm(r.get("site")) in wanted:
+                out.append({"date": date, "score": r.get("score"),
+                            "ucp": r.get("ucp"), "home_status": r.get("home_status")})
+                break
+    return out
+
+
 class H(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=WEB, **kw)
@@ -407,8 +805,112 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/leaderboard?lang=zh'>"
                 f"<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('lb.title', lang))}</h1>"
-                f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a></p>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a> · "
+                f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
+                # /categories 从首页挪过来了（首页只留 Leaderboard + Trend·Signals·Crawlers 两块），
+                # 分品类基准跟榜单是一路的，放这儿比放首页合适
+                f"<a href='/categories{self._qs(lang)}'>{e(S.t('site.cat_link', lang))}</a></p>"
                 f"{render_leaderboard(lang)}"
+                f"{sub_block(lang)}"
+                f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"{sub_script(lang)}"
+                f"</body></html>").encode()
+
+    def _trend_body(self, lang=S.DEFAULT):
+        e = html.escape
+        return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
+                f"<title>{e(S.t('tr.title', lang))}</title>"
+                f"<meta name='description' content=\"{e(S.t('tr.desc', lang))}\">"
+                f"<meta property='og:type' content='article'>"
+                f"<meta property='og:site_name' content='AgentBI'>"
+                f"<meta property='og:title' content=\"{e(S.t('tr.title', lang))}\">"
+                f"<meta property='og:description' content=\"{e(S.t('tr.desc', lang))}\">"
+                f"<meta property='og:url' content='https://agentbi.tech/trend'>"
+                f"<meta name='twitter:card' content='summary'>"
+                f"<link rel='canonical' href='https://agentbi.tech/trend'>"
+                f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/trend'>"
+                f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/trend?lang=zh'>"
+                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"<h1>{e(S.t('tr.title', lang))}</h1>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
+                f"<a href='/leaderboard{self._qs(lang)}'>{e(S.t('site.lb_link', lang))}</a> · "
+                f"<a href='/crawlers{self._qs(lang)}'>{e(S.t('site.cr_link', lang))}</a></p>"
+                f"{render_trend(lang)}"
+                f"{sub_block(lang)}"
+                f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"{sub_script(lang)}"
+                f"</body></html>").encode()
+
+    def _crawlers_body(self, lang=S.DEFAULT):
+        e = html.escape
+        return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
+                f"<title>{e(S.t('cr.title', lang))}</title>"
+                f"<meta name='description' content=\"{e(S.t('cr.desc', lang, n=225))}\">"
+                f"<meta property='og:type' content='article'>"
+                f"<meta property='og:site_name' content='AgentBI'>"
+                f"<meta property='og:title' content=\"{e(S.t('cr.title', lang))}\">"
+                f"<meta property='og:description' content=\"{e(S.t('cr.desc', lang, n=225))}\">"
+                f"<meta property='og:url' content='https://agentbi.tech/crawlers'>"
+                f"<meta name='twitter:card' content='summary'>"
+                f"<link rel='canonical' href='https://agentbi.tech/crawlers'>"
+                f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/crawlers'>"
+                f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/crawlers?lang=zh'>"
+                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"<h1>{e(S.t('cr.title', lang))}</h1>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
+                f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
+                f"<a href='/protocols{self._qs(lang)}'>{e(S.t('site.pr_link', lang))}</a></p>"
+                f"{render_crawlers(lang)}"
+                f"{sub_block(lang)}"
+                f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"{sub_script(lang)}"
+                f"</body></html>").encode()
+
+    def _protocols_body(self, lang=S.DEFAULT):
+        e = html.escape
+        return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
+                f"<title>{e(S.t('pr.title', lang))}</title>"
+                f"<meta name='description' content=\"{e(S.t('pr.desc', lang))}\">"
+                f"<meta property='og:type' content='article'>"
+                f"<meta property='og:site_name' content='AgentBI'>"
+                f"<meta property='og:title' content=\"{e(S.t('pr.title', lang))}\">"
+                f"<meta property='og:description' content=\"{e(S.t('pr.desc', lang))}\">"
+                f"<meta property='og:url' content='https://agentbi.tech/protocols'>"
+                f"<meta name='twitter:card' content='summary'>"
+                f"<link rel='canonical' href='https://agentbi.tech/protocols'>"
+                f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/protocols'>"
+                f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/protocols?lang=zh'>"
+                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"<h1>{e(S.t('pr.title', lang))}</h1>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
+                f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
+                f"<a href='/crawlers{self._qs(lang)}'>{e(S.t('site.cr_link', lang))}</a></p>"
+                f"{render_protocols(lang)}"
+                f"{sub_block(lang)}"
+                f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
+                f"{sub_script(lang)}"
+                f"</body></html>").encode()
+
+    def _categories_body(self, lang=S.DEFAULT):
+        e = html.escape
+        return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
+                f"<title>{e(S.t('cat.title', lang))}</title>"
+                f"<meta name='description' content=\"{e(S.t('cat.desc', lang, n=225))}\">"
+                f"<meta property='og:type' content='article'>"
+                f"<meta property='og:site_name' content='AgentBI'>"
+                f"<meta property='og:title' content=\"{e(S.t('cat.title', lang))}\">"
+                f"<meta property='og:description' content=\"{e(S.t('cat.desc', lang, n=225))}\">"
+                f"<meta property='og:url' content='https://agentbi.tech/categories'>"
+                f"<meta name='twitter:card' content='summary'>"
+                f"<link rel='canonical' href='https://agentbi.tech/categories'>"
+                f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/categories'>"
+                f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/categories?lang=zh'>"
+                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"<h1>{e(S.t('cat.title', lang))}</h1>"
+                f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
+                f"<a href='/protocols{self._qs(lang)}'>{e(S.t('site.pr_link', lang))}</a> · "
+                f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a></p>"
+                f"{render_categories(lang)}"
                 f"{sub_block(lang)}"
                 f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
                 f"{sub_script(lang)}"
@@ -448,6 +950,14 @@ class H(SimpleHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path in ("/leaderboard", "/leaderboard.html"):
             return self._send_html(self._leaderboard_body(self.lang()))
+        if u.path in ("/trend", "/trend.html"):
+            return self._send_html(self._trend_body(self.lang()))
+        if u.path in ("/crawlers", "/crawlers.html"):
+            return self._send_html(self._crawlers_body(self.lang()))
+        if u.path in ("/protocols", "/protocols.html"):
+            return self._send_html(self._protocols_body(self.lang()))
+        if u.path in ("/categories", "/categories.html"):
+            return self._send_html(self._categories_body(self.lang()))
         if u.path in ("/about", "/about.html"):
             self.path = "/about.html"
         return super().do_HEAD()
@@ -476,6 +986,33 @@ class H(SimpleHTTPRequestHandler):
             body = self._leaderboard_body(lang)
             self._send_html(body)
             return self.wfile.write(body)
+
+        if u.path in ("/trend", "/trend.html"):
+            body = self._trend_body(lang)
+            self._send_html(body)
+            return self.wfile.write(body)
+
+        if u.path in ("/crawlers", "/crawlers.html"):
+            body = self._crawlers_body(lang)
+            self._send_html(body)
+            return self.wfile.write(body)
+
+        if u.path in ("/protocols", "/protocols.html"):
+            body = self._protocols_body(lang)
+            self._send_html(body)
+            return self.wfile.write(body)
+
+        if u.path in ("/categories", "/categories.html"):
+            body = self._categories_body(lang)
+            self._send_html(body)
+            return self.wfile.write(body)
+
+        if u.path == "/api/site-history":
+            q = parse_qs(u.query)
+            site = (q.get("site") or [""])[0].strip()
+            if not site:
+                return self._json({"error": "site required"}, 400)
+            return self._json({"site": site, "history": _site_history(site)})
 
         if u.path in ("/about", "/about.html"):
             return self._send_page("about.html", lang)

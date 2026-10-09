@@ -119,10 +119,15 @@ def is_safe_url(url):
     return True
 
 
-def fetch(url, ua, timeout=15):
-    """GET 一次，逐跳校验重定向目标。任何失败都体现在 status=0 / error，不抛异常。"""
+def fetch(url, ua, timeout=15, follow=True):
+    """GET 一次，逐跳校验重定向目标。任何失败都体现在 status=0 / error，不抛异常。
+
+    follow=False 时不跟随 3xx，把 3xx 本身作为结果返回（location 一并带回）。
+    UCP 规范要求 profile 端点 MUST NOT 用重定向、实现 MUST NOT 跟随，
+    所以探测 /.well-known/ucp 时必须用 follow=False —— 见 ucp#904。
+    """
     out = {"url": url, "status": 0, "final_url": url, "bytes": 0,
-           "text": "", "error": None, "headers": {}}
+           "text": "", "error": None, "headers": {}, "location": None}
     if not is_safe_url(url):
         out["error"] = "BlockedURL"
         return out
@@ -133,6 +138,11 @@ def fetch(url, ua, timeout=15):
                              allow_redirects=False)
             loc = r.headers.get("location")
             if r.is_redirect and loc:
+                if not follow:
+                    out.update(status=r.status_code, final_url=cur,
+                               headers=dict(r.headers), location=loc,
+                               bytes=len(r.content), text=r.text[:MAX_TEXT])
+                    return out
                 nxt = urljoin(cur, loc)
                 if not is_safe_url(nxt):
                     out["error"] = "BlockedRedirect"
@@ -243,7 +253,8 @@ AGENT_TOKENS = list(AGENTS.keys()) + ["Google-Extended", "CCBot", "anthropic-ai"
 
 def check_robots(origin, ua, timeout=15):
     r = fetch(urljoin(origin, "/robots.txt"), ua, timeout)
-    res = {"status": r["status"], "rules": {}, "wildcard_disallow": False, "present": False}
+    res = {"status": r["status"], "rules": {}, "wildcard_disallow": False, "present": False,
+           "raw": r["text"][:200_000]}
     if r["status"] != 200:
         return res
     res["present"] = True
@@ -276,6 +287,52 @@ def check_robots(origin, ua, timeout=15):
                         res["rules"].setdefault(tok, []).append(
                             ("allow" if cur_allow else "disallow", val))
     return res
+
+
+def robots_allows(robots_text, ua, path):
+    """robots.txt 是否允许 ua 取 path。够用就好，不追求完整 RFC。
+
+    #867 的 frame 要求把 robots refusals 单独计数，所以这里必须能判"被拒绝"——
+    不读 robots 的话，那一项永远是空的，和别人摆在一张表里会显得我们没有被拒绝过。
+    """
+    if not robots_text:
+        return True
+    groups, cur_agents, cur_rules = [], [], []
+    for raw in robots_text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        low = line.lower()
+        if low.startswith("user-agent:"):
+            if cur_agents or cur_rules:
+                groups.append((cur_agents, cur_rules))
+            cur_agents, cur_rules = [line.split(":", 1)[1].strip().lower()], []
+        elif low.startswith(("allow:", "disallow:")):
+            kind, _, val = line.partition(":")
+            cur_rules.append((kind.strip().lower(), val.strip()))
+    if cur_agents or cur_rules:
+        groups.append((cur_agents, cur_rules))
+
+    ua_l = (ua or "").lower()
+    best = None
+    for agents, rules in groups:
+        for a in agents:
+            if a == "*" or a in ua_l:
+                spec = 0 if a == "*" else len(a)
+                if best is None or spec > best[0]:
+                    best = (spec, rules)
+    if best is None:
+        return True
+    # 最长匹配优先；Disallow: 空串等于 allow all
+    kind_win, len_win = None, -1
+    for kind, val in best[1]:
+        if not val:
+            if kind == "disallow" and len_win < 0:
+                kind_win, len_win = "allow", 0
+            continue
+        if path.startswith(val) and len(val) > len_win:
+            kind_win, len_win = kind, len(val)
+    return True if kind_win is None else (kind_win == "allow")
 
 
 # ----------------------------------------------------------------- UA 探测
@@ -322,17 +379,32 @@ UNVERIFIED_PROTO_PATHS = ["/.well-known/acp", "/.well-known/agent-commerce.json"
 PROTO_TOKENS = re.compile(r'\b(acp|ucp|ap2|agentic[- ]commerce)\b', re.I)
 
 
-def check_ucp(origin, ua, timeout=12):
+def check_ucp(origin, ua, timeout=12, robots_text=None):
     """解析 UCP manifest。返回结构化的版本/服务信息，用于"落后几个版本"的判断。"""
     out = {"present": False, "status": 0, "version": None, "is_html": False,
            "supported_versions": [], "services": {}, "endpoints": [], "raw_bytes": 0,
-           "ctype": "", "final_url": "", "redirected": False}
+           "ctype": "", "final_url": "", "redirected": False,
+           "redirect_3xx": False, "location": None, "location_host": None,
+           "keys_field": None, "robots_refused": False}
     target = urljoin(origin, UCP_PATH)
-    r = fetch(target, ua, timeout)
+    if robots_text is not None and not robots_allows(robots_text, ua, UCP_PATH):
+        # 被 robots 拒绝：不发起请求，单独计数。这不是"没部署"，也不是"连不上"。
+        out["robots_refused"] = True
+        return out
+    # 规范：profile 端点 MUST NOT 用重定向，实现 MUST NOT 跟随（ucp#904，frmoretto）。
+    # 跟随了就无法区分"部署了但重定向"和"能访问"，而 geo-redirect 还会随探测位置变。
+    r = fetch(target, ua, timeout, follow=False)
     out["status"], out["raw_bytes"] = r["status"], r["bytes"]
     out["ctype"] = (r.get("headers") or {}).get("Content-Type", "").split(";")[0].strip().lower()
     out["final_url"] = r.get("final_url") or ""
-    # 尾斜杠也算重定向：theiconic 的 /.well-known/ucp → /ucp/ 才返回内容
+    if 300 <= (r["status"] or 0) < 400:
+        # 单独一类，不并入 "200 但不解析"，也不算成"没部署"
+        out["redirect_3xx"] = True
+        loc = r.get("location") or ""
+        out["location"] = loc
+        out["location_host"] = (urlparse(urljoin(target, loc)).hostname
+                                if loc else None)
+        return out
     out["redirected"] = bool(out["final_url"]) and out["final_url"].rstrip("/") != target.rstrip("/")
     if r["status"] != 200:
         return out
@@ -347,6 +419,9 @@ def check_ucp(origin, ua, timeout=12):
         return out
     out["present"] = True
     out["version"] = u.get("version")
+    # #867 的 frame 要记这个：profile 是否发布签名键（keys vs signing_keys，per #656）
+    out["keys_field"] = ("signing_keys" if "signing_keys" in u
+                         else "keys" if "keys" in u else None)
     out["supported_versions"] = sorted(u.get("supported_versions", {}) or {}, reverse=True)
     for name, entries in (u.get("services") or {}).items():
         if isinstance(entries, list):
@@ -358,6 +433,30 @@ def check_ucp(origin, ua, timeout=12):
                 if isinstance(e, dict) and e.get("endpoint"):
                     out["endpoints"].append({"service": name, "endpoint": e["endpoint"],
                                              "transport": e.get("transport")})
+    return out
+
+
+SERVER_CARD_PATH = "/.well-known/mcp/server-card.json"
+
+
+def check_server_card(origin, ua, timeout=8):
+    """第二路由：MCP server card。
+
+    仍是 proposal，而且 frmoretto 要求——只通过 server card 找到的 host 必须单独成行，
+    **不能并进** /.well-known/ucp 的计数。所以这里只做独立探测，不参与 present 判定。
+    """
+    out = {"present": False, "status": 0, "bytes": 0, "is_json": False,
+           "route": SERVER_CARD_PATH, "proposal": True}
+    r = fetch(urljoin(origin, SERVER_CARD_PATH), ua, timeout, follow=False)
+    out["status"], out["bytes"] = r["status"], r["bytes"]
+    if r["status"] != 200:
+        return out
+    try:
+        json.loads(r["text"])
+        out["is_json"] = True
+        out["present"] = True
+    except Exception:
+        pass
     return out
 
 
@@ -558,6 +657,14 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
     if home["status"] == 0:
         return {"url": url, "error": S.t("rep.err_unreachable", lang, err=home["error"])}
 
+    # 规范 host：用首页 settle 下来的 host，而不是我们输入的那个。
+    # 不这样做的话，探 shein.com 会拿到 301 → www.shein.com，在"不跟随 3xx"的口径下
+    # 被记成"没部署"，而人家其实部署了 —— 实测丢了 theiconic 和 theoutnet 两个真阳性
+    #（ucp#904）。所以 canonicalise 必须在探测 profile 路径之前完成。
+    f = urlparse(home["final_url"])
+    if f.scheme and f.netloc:
+        origin = f"{f.scheme}://{f.netloc}"
+
     target, target_kind = url, "homepage"
     if product_url:
         target, target_kind = product_url, "product-page(given)"
@@ -570,7 +677,12 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
     struct = check_structured(page["text"])
     llms = check_llms(origin, UA_SCANNER, timeout)
     robots = check_robots(origin, UA_SCANNER, timeout)
-    ucp = check_ucp(origin, UA_SCANNER)
+    rtxt = robots.get("raw") if robots.get("present") else None
+    ucp = check_ucp(origin, UA_SCANNER, robots_text=rtxt)
+    server_card = (check_server_card(origin, UA_SCANNER)
+                   if robots_allows(rtxt or "", UA_SCANNER, SERVER_CARD_PATH)
+                   else {"present": False, "status": 0, "bytes": 0, "is_json": False,
+                         "route": SERVER_CARD_PATH, "proposal": True, "robots_refused": True})
     protos = (probe_unverified(origin, home["text"], UA_SCANNER) if unverified
               else {"paths": {}, "tokens": []})
     platform = detect_platform(home["headers"], home["text"])
@@ -587,7 +699,8 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
             "platform": platform,
             "home_status": home["status"],
             "score": total, "detail": detail, "structured": struct, "llms": llms,
-            "robots": robots, "ucp": ucp, "probe": probe, "protocols": protos,
+            "robots": robots, "ucp": ucp, "server_card": server_card,
+            "origin": origin, "probe": probe, "protocols": protos,
             "fixes": fixes(struct, llms, robots, probe, ucp, protos, lang)}
 
 

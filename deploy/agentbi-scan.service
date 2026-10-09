@@ -11,7 +11,8 @@ Type=oneshot
 User=agentbi
 Group=agentbi
 WorkingDirectory=/opt/agentbi
-ExecStart=/usr/bin/python3 -u scan_batch.py sites.txt
+# --live 是必须的：不加就写 batch.test.json / leaderboard.test.md（防小样本试跑覆盖生产数据）
+ExecStart=/usr/bin/python3 -u scan_batch.py sites.txt --live
 # 订阅者名单没有别的副本（要收信才会意识到它有多脆），每天跟快照一起留一份
 ExecStartPost=/bin/sh -c 'test -f /opt/agentbi/subscribers.jsonl && cp /opt/agentbi/subscribers.jsonl /opt/agentbi/history/subscribers-$(date -u +%%F).jsonl || true'
 TimeoutStartSec=3600
