@@ -54,6 +54,10 @@ def ucp_fields(u):
         "ucp_versions": len(u["supported_versions"]),
         "ucp_keys_field": u.get("keys_field"),
         "ucp_robots_refused": bool(u.get("robots_refused")),
+        # frame v3：429 要带 Retry-After 值；hosting 行（可选）看缓存头与校验器
+        "ucp_retry_after": u.get("retry_after"),
+        "ucp_cache_public": bool(u.get("cache_public")),
+        "ucp_has_validator": bool(u.get("has_validator")),
         "ucp_services": list(u["services"]),
     }
 

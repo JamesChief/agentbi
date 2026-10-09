@@ -385,7 +385,10 @@ def check_ucp(origin, ua, timeout=12, robots_text=None):
            "supported_versions": [], "services": {}, "endpoints": [], "raw_bytes": 0,
            "ctype": "", "final_url": "", "redirected": False,
            "redirect_3xx": False, "location": None, "location_host": None,
-           "keys_field": None, "robots_refused": False}
+           "keys_field": None, "robots_refused": False,
+           # ucp#867 frame v3 要求：429 要带 Retry-After 值；hosting 行要 Cache-Control
+           # public + max-age>=60 与 ETag/Last-Modified。都从同一份响应头里取，不额外发请求。
+           "retry_after": None, "cache_public": False, "has_validator": False}
     target = urljoin(origin, UCP_PATH)
     if robots_text is not None and not robots_allows(robots_text, ua, UCP_PATH):
         # 被 robots 拒绝：不发起请求，单独计数。这不是"没部署"，也不是"连不上"。
@@ -395,6 +398,12 @@ def check_ucp(origin, ua, timeout=12, robots_text=None):
     # 跟随了就无法区分"部署了但重定向"和"能访问"，而 geo-redirect 还会随探测位置变。
     r = fetch(target, ua, timeout, follow=False)
     out["status"], out["raw_bytes"] = r["status"], r["bytes"]
+    h = r.get("headers") or {}
+    out["retry_after"] = h.get("Retry-After")
+    cc = (h.get("Cache-Control") or "").lower()
+    m = re.search(r"max-age=(\d+)", cc)
+    out["cache_public"] = "public" in cc and bool(m) and int(m.group(1)) >= 60
+    out["has_validator"] = bool(h.get("ETag") or h.get("Last-Modified"))
     out["ctype"] = (r.get("headers") or {}).get("Content-Type", "").split(";")[0].strip().lower()
     out["final_url"] = r.get("final_url") or ""
     if 300 <= (r["status"] or 0) < 400:
