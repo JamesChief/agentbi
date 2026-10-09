@@ -19,3 +19,7 @@ coldmail*.md
 # 部署包里绝不能带它（会把线上数据覆盖回去）。
 subscribers.jsonl
 contacts.py
+
+# 榜单条目纠错/下架/认领。跟 subscribers.jsonl 一样：服务器上是唯一真实数据，
+# 部署包里绝不能带（会把线上数据覆盖回去）。
+corrections.jsonl

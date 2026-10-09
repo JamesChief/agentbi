@@ -28,6 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 BATCH = os.path.join(HERE, "batch.json")
 SUBSCRIBERS = os.path.join(HERE, "subscribers.jsonl")
+CORRECTIONS = os.path.join(HERE, "corrections.jsonl")
 
 RATE_MAX = 10           # 每 IP 在窗口内的请求数
 RATE_WINDOW = 300
@@ -130,6 +131,85 @@ def sub_script(lang):
             if k.startswith("sub.")}
     return ("<script>window.__SUB_L=" + json.dumps(keys, ensure_ascii=False) + ";</script>"
             "<script src='/sub.js' defer></script>")
+
+
+def lb_hosts():
+    """榜单里的站点清单，给纠错下拉框用。榜单 HTML 有缓存，这个不常读。"""
+    try:
+        rows = json.load(open(BATCH))["rows"]
+    except Exception:
+        return []
+    hosts = sorted({urlparse(r["site"]).netloc.lower() for r in rows
+                    if r.get("site")})
+    return hosts
+
+
+def corr_block(lang):
+    """榜单条目自助纠错。
+
+    为什么有这个：冷邮 20 封、到达率 0/20——中型 DTC 的公开邮箱只能到客服，
+    到不了管网站的人。**别再去找人，让站主自己能找到我们。**
+    所以这个框放在榜单页（站主最可能来的地方），而不是首页。
+    """
+    e = html.escape
+    opts = "".join(f"<option value='{e(h)}'>{e(h)}</option>" for h in lb_hosts())
+    return (f"<div class='subscribe' id='correct'>"
+            f"<h3>{e(S.t('corr.title', lang))}</h3>"
+            f"<form class='corr-form' novalidate>"
+            f"<p class='subscribe-desc'>{e(S.t('corr.desc', lang))}</p>"
+            f"<p><label>{e(S.t('corr.site', lang))} "
+            f"<select name='site' class='corr-site' required>"
+            f"<option value=''>—</option>{opts}</select></label></p>"
+            f"<p><label>{e(S.t('corr.kind', lang))} "
+            f"<select name='kind' class='corr-kind'>"
+            f"<option value='wrong'>{e(S.t('corr.k_wrong', lang))}</option>"
+            f"<option value='remove'>{e(S.t('corr.k_remove', lang))}</option>"
+            f"<option value='claim'>{e(S.t('corr.k_claim', lang))}</option>"
+            f"</select></label></p>"
+            f"<p><textarea name='note' class='corr-note' rows='3' maxlength='600' "
+            f"placeholder=\"{e(S.t('corr.note', lang))}\"></textarea></p>"
+            f"<p><input type='email' name='email' class='corr-email' "
+            f"placeholder=\"{e(S.t('corr.email', lang))}\" autocomplete='email'></p>"
+            f"<p><button type='submit'>{e(S.t('corr.button', lang))}</button></p>"
+            f"</form>"
+            f"<p class='subscribe-consent'>{e(S.t('corr.consent', lang))}</p>"
+            f"<p class='corr-msg' role='status'></p>"
+            f"</div>"
+            f"<script>window.__CORR_L={json.dumps({k: v for k, v in S.STR.get(lang, S.STR[S.DEFAULT]).items() if k.startswith('corr.')}, ensure_ascii=False)};</script>"
+            f"<script>{CORR_JS}</script>")
+
+
+# 内联而不是新建 .js：这个表单只在榜单页出现一次，多一个文件不值得。
+# 用 textContent 输出一切服务端文案，避免把用户输入/翻译串拼进 HTML。
+CORR_JS = """
+(function(){
+  var L = window.__CORR_L || {}, f = document.querySelector('.corr-form');
+  if(!f) return;
+  var msg = document.querySelector('.corr-msg');
+  f.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    msg.textContent = '';
+    var site = f.querySelector('.corr-site').value;
+    if(!site){ msg.textContent = L['corr.err_site'] || 'pick a store'; return; }
+    var body = {
+      site: site,
+      kind: f.querySelector('.corr-kind').value,
+      note: (f.querySelector('.corr-note').value || '').slice(0, 600),
+      email: (f.querySelector('.corr-email').value || '').trim()
+    };
+    fetch('/api/correct', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(j){ return {s:r.status, j:j}; }); })
+      .then(function(o){
+        msg.textContent = o.j && o.j.msg ? o.j.msg
+                        : (o.j && o.j.error) ? o.j.error
+                        : (L['corr.err_fail'] || 'failed');
+        if(o.s === 200){ f.querySelector('.corr-note').value = ''; }
+      })
+      .catch(function(){ msg.textContent = L['corr.err_fail'] || 'failed'; });
+  });
+})();
+"""
 
 
 def render_page(name, lang):
@@ -806,11 +886,13 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('lb.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a> · "
+                f"<a href='#correct'>{e(S.t('corr.link', lang))}</a> · "
                 f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
                 # /categories 从首页挪过来了（首页只留 Leaderboard + Trend·Signals·Crawlers 两块），
                 # 分品类基准跟榜单是一路的，放这儿比放首页合适
                 f"<a href='/categories{self._qs(lang)}'>{e(S.t('site.cat_link', lang))}</a></p>"
                 f"{render_leaderboard(lang)}"
+                f"{corr_block(lang)}"
                 f"{sub_block(lang)}"
                 f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"
                 f"{sub_script(lang)}"
@@ -1021,6 +1103,8 @@ class H(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path == "/api/correct":
+            return self._correct()
         if u.path != "/api/subscribe":
             return self._json({"error": "not found"}, 404)
         lang = self.lang()
@@ -1066,6 +1150,56 @@ class H(SimpleHTTPRequestHandler):
 
         # 已订阅和首次订阅返回同一句：不泄露某个邮箱在不在库里
         return self._json({"ok": True, "msg": S.t("sub.ok", lang)})
+
+    def _correct(self):
+        """榜单条目纠错 / 下架 / 认领。
+
+        故意不做所有权验证：验证就要求对方先证明自己是站主，那跟冷邮一样又把人挡回去了。
+        代价是谁都能替别人提交——所以 site 必须在榜单里，正文限长，限流，
+        并且**不自动生效**：写进 corrections.jsonl，由我人工处理。
+        """
+        lang = self.lang()
+        ip = self.client_ip()
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > 8192:
+            return self._json({"error": S.t("corr.err_fail", lang)}, 400)
+        try:
+            raw = self.rfile.read(length).decode("utf-8", "replace")
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+            if ctype == "application/json":
+                d = json.loads(raw)
+            else:
+                q = parse_qs(raw)
+                d = {k: (v[0] if isinstance(v, list) and v else "")
+                     for k, v in q.items()}
+        except Exception:
+            d = {}
+
+        site = (d.get("site") or "").strip().lower()
+        kind = (d.get("kind") or "wrong").strip().lower()
+        note = (d.get("note") or "").strip()[:600]
+        email = (d.get("email") or "").strip().lower()
+
+        # 站点必须在榜单里：既防乱填，也让"哪一行有争议"这件事 unambiguous
+        if site not in lb_hosts():
+            return self._json({"error": S.t("corr.err_site", lang)}, 400)
+        if kind not in ("wrong", "remove", "claim"):
+            kind = "wrong"
+        if email and not EMAIL_RE.match(email):
+            email = ""                      # 邮箱是可选的，填错就当没填，不报错
+        if not sub_rate_ok(ip):
+            return self._json({"error": S.t("corr.err_rate", lang)}, 429)
+
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "site": site, "kind": kind, "note": note, "email": email,
+               "lang": lang}
+        try:
+            with _sub_lock:
+                with open(CORRECTIONS, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception:
+            return self._json({"error": S.t("corr.err_fail", lang)}, 500)
+        return self._json({"ok": True, "msg": S.t("corr.ok", lang)})
 
 
 if __name__ == "__main__":

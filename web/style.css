@@ -44,3 +44,12 @@ footer { margin-top: 50px; padding-top: 14px; border-top: 1px solid var(--line);
 .subscribe-consent { color: var(--mut); font-size: 12px; margin: 8px 0 0; }
 .subscribe-msg { font-size: 13px; margin: 8px 0 0; min-height: 1em; }
 .subscribe-msg:not(:empty) { color: var(--good); }
+
+/* 条目纠错框：复用订阅框的外壳，多出来的控件给个宽度就行 */
+.corr-form p { margin: 0 0 10px; }
+.corr-form label { display: block; font-size: 13px; color: var(--mut); }
+.corr-site, .corr-kind { display: block; width: 100%; max-width: 340px; margin-top: 4px;
+                         padding: 7px 8px; font: inherit; }
+.corr-note { display: block; width: 100%; max-width: 480px; padding: 7px 8px;
+             font: inherit; resize: vertical; }
+.corr-msg { font-size: 13px; margin: 8px 0 0; min-height: 1em; color: var(--good); }

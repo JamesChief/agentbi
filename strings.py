@@ -45,6 +45,27 @@ STR = {
         "sub.err_rate": "Too many attempts. Try again in a while.",
         "sub.err_fail": "Something broke on my side. Try again, or open an issue.",
 
+        # ---- 榜单条目自助纠错（冷邮那条线留下的唯一正经产出）----------------
+        # 实测：中型 DTC 的公开邮箱只能到客服，到不了管网站的人（20 封到达率 0/20）。
+        # 所以别再找人，让站主自己在条目上找到入口。
+        "corr.title": "Is your entry wrong?",
+        "corr.desc": "This benchmark is measured from outside, so it gets things wrong. "
+                     "If one of these stores is yours, tell me — correct it, take it down, or claim it.",
+        "corr.site": "Store",
+        "corr.kind": "What do you need",
+        "corr.k_wrong": "The data is wrong",
+        "corr.k_remove": "Take my store off the leaderboard",
+        "corr.k_claim": "I own this store — talk to me",
+        "corr.note": "Details (optional)",
+        "corr.email": "Your email (optional, only so I can reply)",
+        "corr.button": "Send",
+        "corr.ok": "Got it — I'll look at it.",
+        "corr.err_site": "Pick a store from the list.",
+        "corr.err_rate": "Too many attempts. Try again in a while.",
+        "corr.err_fail": "Something broke on my side. Try again, or open an issue.",
+        "corr.consent": "No tracking. An email is used only to reply to this.",
+        "corr.link": "Wrong entry? Tell me",
+
         "dim.fetch": "Fetchable by agents",
         "dim.structured": "Product structured data",
         "dim.ucp": "UCP manifest",
@@ -424,6 +445,25 @@ STR = {
         "sub.err_invalid": "这个邮箱地址看起来不对。",
         "sub.err_rate": "操作太频繁，稍后再试。",
         "sub.err_fail": "我这边出错了。稍后再试，或开个 issue 告诉我。",
+
+        # ---- 榜单条目自助纠错（冷邮那条线留下的唯一正经产出）----------------
+        "corr.title": "你的条目不对？",
+        "corr.desc": "这份榜单是从外部测的，一定会测错。如果名单里有你的站，告诉我——"
+                     "改数据、下架，或者认领。",
+        "corr.site": "站点",
+        "corr.kind": "你需要什么",
+        "corr.k_wrong": "数据有错",
+        "corr.k_remove": "把我的站从榜单移除",
+        "corr.k_claim": "这个站是我的，联系我",
+        "corr.note": "补充说明（可选）",
+        "corr.email": "邮箱（可选，只用于回复你）",
+        "corr.button": "提交",
+        "corr.ok": "收到了，我会看。",
+        "corr.err_site": "请从列表里选一个站点。",
+        "corr.err_rate": "操作太频繁，稍后再试。",
+        "corr.err_fail": "我这边出错了。稍后再试，或开个 issue。",
+        "corr.consent": "不做追踪。留邮箱只用于回复这一条。",
+        "corr.link": "条目有错？告诉我",
 
         "dim.fetch": "agent 能否抓取",
         "dim.structured": "产品结构化数据",
