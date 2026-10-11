@@ -703,6 +703,15 @@ def _signal_counts(data):
     out["all"] = sum(1 for r in reach
                      if all(fn(r) for k, _, fn in _SIGNALS if k in computable))
     out["all_of"] = len(computable)
+    # 首页没 settle 到店主机、改用种子 host 探测的站。这些阳性是靠回退才拿到的，
+    # 必须跟头条数字并排显示——不然哪天有站 settle 到 CDN 主机，通过率变了没人知道为什么
+    #（ucp#867，frmoretto 2026-10-11）。
+    if reach and "host_unsettled" in reach[0]:
+        un = [r for r in reach if r.get("host_unsettled")]
+        out["unsettled"] = len(un)
+        out["unsettled_positive"] = sum(1 for r in un if r.get("ucp"))
+    else:
+        out["unsettled"] = out["unsettled_positive"] = None
     return out
 
 
@@ -720,6 +729,10 @@ def render_protocols(lang=S.DEFAULT):
     c = _signal_counts(cur)
     reach = c["reach"] or 1
     L = [f"<p class='note'>{S.t('pr.intro', lang, n=c['reach'], date=date)}</p>"]
+    # 回退到种子 host 的站数，就放在头条数字旁边（ucp#867）
+    if c.get("unsettled") is not None:
+        L.append("<p class='note'>" + S.t("pr.unsettled", lang, n=c["unsettled"],
+                                          k=c["unsettled_positive"]) + "</p>")
 
     L.append("<table><tr>"
              f"<th>{e(S.t('pr.th_signal', lang))}</th>"

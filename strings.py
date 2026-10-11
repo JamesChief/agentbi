@@ -205,6 +205,9 @@ STR = {
         "pr.intro": "Across {n} evaluable stores in the {date} snapshot. Publishing one signal "
                     "does not make a store usable to an agent, so the last line is the one "
                     "that matters.",
+        "pr.unsettled": "Separate from the counts below: <b>{n}</b> storefronts did not settle "
+                        "on a storefront host, so they were probed at the seed host instead. "
+                        "<b>{k}</b> of the positives above depend on that fallback.",
         "pr.th_signal": "Signal",
         "pr.th_n": "Stores",
         "pr.th_pct": "Share",
@@ -588,6 +591,9 @@ STR = {
                    "以及同时具备全部的有多稀少。",
         "pr.intro": "基于 {date} 快照里 {n} 个可评估站点。只发布其中一项，对 agent 来说仍然不可用，"
                     "所以最后一行才是关键。",
+        "pr.unsettled": "与下面的计数分开算：有 <b>{n}</b> 个站的首页没有 settle 到店主机"
+                        "（比如跳到了 CDN 主机），这些站改在种子 host 上探测。"
+                        "上面阳性里有 <b>{k}</b> 个是靠这个回退才拿到的。",
         "pr.th_signal": "信号",
         "pr.th_n": "站数",
         "pr.th_pct": "占比",
