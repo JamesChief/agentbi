@@ -114,6 +114,11 @@ def one(url, do_probe):
             "site": url,
             "platform": r["platform"],
             "home_status": r["home_status"],
+            # host selection（ucp#867 frame 的 run field）：探的是哪个 host、
+            # 与种子的注册域关系、有没有 settle 到非店主机（CDN/asset 主机）。
+            "probed_host": urlparse(r["origin"]).netloc,
+            "settled_host": r.get("settled_host") or "",
+            "host_unsettled": bool(r.get("host_unsettled")),
             "checked": r["checked_url"],
             "score": r["score"],
             **ucp_fields(r["ucp"]),

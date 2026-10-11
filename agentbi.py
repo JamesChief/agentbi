@@ -40,6 +40,21 @@ UA_BROWSER = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 # 截断过短会直接漏判"没有结构化数据"。2M 已覆盖绝大多数页面。
 MAX_TEXT = 2_000_000
 
+# reg_domain() 用：字符集里出现过的双段后缀。漏了只会把"同注册域"误判成"其他域"，
+# 属于保守方向（会触发新桶而不是静默算成已部署），可以按需续。
+TWO_PART_SUFFIXES = {
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au",
+    "co.nz", "co.jp", "co.kr", "com.br", "com.mx", "co.za", "com.hk",
+    "com.sg", "com.tw", "co.il", "com.tr", "com.cn", "net.cn", "org.cn",
+}
+
+# 实测 settle 到过的 CDN/asset 主机：assets.wsimgs.com、img.ltwebstatic.com、
+# assets.weimgs.com（2026-10-09 一轮）。这类主机不提供 profile，探它只会拿到 HTML
+# 404。只按"响应是不是 HTML"判不够——CDN 也会返回 HTML 错误页，所以再加一层前缀。
+# 误判方向是保守的：被标成 unsettled 的站单独成桶，不会被算成"已部署"也不会算成"没部署"。
+ASSET_LABELS = {"assets", "asset", "img", "images", "static", "cdn", "media",
+                "media-cache", "cache"}
+
 # 主流 AI agent 的公开 UA。这是壁垒①(agent 指纹库)的起点，需持续维护。
 AGENTS = {
     "GPTBot": "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)",
@@ -74,6 +89,30 @@ BASE_HEADERS = {
     "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
 }
+
+
+def reg_domain(host):
+    """eTLD+1（粗略）：只认常见双段后缀，够用来判断"是不是同一个注册域"。
+
+    ucp#867 的 frame 要求记录 probed host 与种子的关系（同主机 / 同注册域 / 其他域），
+    frmoretto 2026-10-10 指出我们把 settle 到 `assets.wsimgs.com` 这种 CDN 主机
+    算成了"同注册域"——它其实连注册域都不同。所以必须能算注册域，不能只比 host。
+    """
+    host = (host or "").lower().split(":")[0].rstrip(".")
+    parts = [p for p in host.split(".") if p]
+    if len(parts) <= 2:
+        return ".".join(parts)
+    if ".".join(parts[-2:]) in TWO_PART_SUFFIXES:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+def is_html_response(headers, text):
+    ct = ((headers or {}).get("Content-Type") or "").split(";")[0].strip().lower()
+    if ct.startswith("text/html") or "xml" in ct:
+        return True
+    # 有些 CDN 不返回 Content-Type，退回看内容头
+    return bool(re.match(r"^\s*(<!doctype|<html)", text or "", re.I))
 
 
 def _headers(ua):
@@ -670,9 +709,24 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
     # 不这样做的话，探 shein.com 会拿到 301 → www.shein.com，在"不跟随 3xx"的口径下
     # 被记成"没部署"，而人家其实部署了 —— 实测丢了 theiconic 和 theoutnet 两个真阳性
     #（ucp#904）。所以 canonicalise 必须在探测 profile 路径之前完成。
+    #
+    # 但 canonicalise 本身也会错：首页可能 settle 到 CDN/asset 主机
+    #（实测 williams-sonoma → assets.wsimgs.com、shein → img.ltwebstatic.com），
+    # 那时去探 profile 路径是在问一个根本不提供 profile 的主机，拿回来的 404 会被
+    # 记成"没部署"（ucp#867，frmoretto 2026-10-10）。判定：settle 后的注册域与种子
+    # 不同 **且** 响应不是 HTML → 认为首页没有 settle 在店主机上，回退到种子 host，
+    # 并把这件事单独记下来（不并入任何一行计数）。
     f = urlparse(home["final_url"])
+    seed_host, settled_host = urlparse(url).netloc, (f.netloc or "")
+    host_unsettled = False
     if f.scheme and f.netloc:
-        origin = f"{f.scheme}://{f.netloc}"
+        looks_asset = (settled_host.lower().split(".")[0] in ASSET_LABELS)
+        if (settled_host.lower() != seed_host.lower()
+                and reg_domain(settled_host) != reg_domain(seed_host)
+                and (looks_asset or not is_html_response(home["headers"], home["text"]))):
+            host_unsettled = True          # 保留 origin = 种子 host
+        else:
+            origin = f"{f.scheme}://{f.netloc}"
 
     target, target_kind = url, "homepage"
     if product_url:
@@ -710,6 +764,11 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
             "score": total, "detail": detail, "structured": struct, "llms": llms,
             "robots": robots, "ucp": ucp, "server_card": server_card,
             "origin": origin, "probe": probe, "protocols": protos,
+            # host selection 是 #867 frame 的 run field，必须随每次运行公开：
+            # 探的是哪个 host、它跟种子是什么关系、有没有 settle 到非店主机。
+            "settled_host": settled_host, "host_unsettled": host_unsettled,
+            "home_ctype": ((home["headers"].get("Content-Type") or "")
+                           .split(";")[0].strip().lower()),
             "fixes": fixes(struct, llms, robots, probe, ucp, protos, lang)}
 
 
