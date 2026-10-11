@@ -95,7 +95,7 @@ STR = {
         "rep.warn": "⚠ {note}",
 
         "err.bad_url": "Invalid URL (http/https only)",
-        "err.rate": "Too many requests, try again shortly",
+        "err.rate": "Too many scans from your IP. Try again in {n} minutes",
         "err.cooldown": "That site was just scanned, try again in {n} minutes",
         "err.busy": "Busy right now, retry in 30 seconds",
 
@@ -499,7 +499,7 @@ STR = {
         "rep.warn": "⚠ {note}",
 
         "err.bad_url": "URL 不合法（仅支持 http/https）",
-        "err.rate": "请求过于频繁，请稍后再试",
+        "err.rate": "你的 IP 检测次数已达上限，请 {n} 分钟后再试",
         "err.cooldown": "该站点刚被检测过，请 {n} 分钟后再试",
         "err.busy": "现在排队检测的人较多，请 30 秒后重试",
 

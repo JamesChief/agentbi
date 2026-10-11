@@ -271,6 +271,15 @@ def render_page(name, lang):
     return S.render_template(raw, lang)
 
 
+def _cache_peek(url, lang):
+    """缓存里的新鲜结果，没有就 None。只用来在限流之前放行重复查询。"""
+    with _lock:
+        hit = _cache.get((url, lang))
+        if hit and time.time() - hit[0] < CACHE_TTL:
+            return hit[1]
+    return None
+
+
 def do_check(url, lang):
     now = time.time()
     key = (url, lang)                      # 同一 URL 的两种语言结果不共用缓存
@@ -1094,8 +1103,15 @@ class H(SimpleHTTPRequestHandler):
             url = (q.get("url") or [""])[0].strip()
             if not URL_RE.match(url):
                 return self._json({"error": S.t("err.bad_url", lang)}, 400)
+            # 缓存命中不走配额：反复点同一个示例站不该把人挡在门外。
+            # 限流要挡的是"拿我们当打手去打别人的站"，那是**真实扫描**的次数，
+            # 而缓存命中一次外网请求都不发。
+            hit = _cache_peek(url, lang)
+            if hit is not None:
+                return self._json({"cached": True, "result": hit})
             if not rate_ok(self.client_ip()):
-                return self._json({"error": S.t("err.rate", lang)}, 429)
+                return self._json(
+                    {"error": S.t("err.rate", lang, n=RATE_WINDOW // 60)}, 429)
             try:
                 res, cached = do_check(url, lang)
             except Exception as e:
