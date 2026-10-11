@@ -19,6 +19,11 @@ STR = {
         "site.placeholder": "https://your-store.com",
         "site.button": "Scan",
         "site.scanning": "Scanning, 10–20 seconds…",
+        "site.try": "Not sure where to start? Click one to see a report. Scores shown are "
+                   "from today's batch; clicking runs a fresh scan, so it can differ by a point or two:",
+        "site.ex_at": "UCP {v}",
+        "site.ex_lag": "UCP {v} — behind",
+        "site.ex_none": "no UCP",
         "site.lb_link": "Leaderboard: 225 stores tested →",
         "site.tr_link": "Trend",
         "site.cr_link": "Crawlers",
@@ -421,6 +426,11 @@ STR = {
         "site.placeholder": "https://your-store.com",
         "site.button": "检测",
         "site.scanning": "检测中，约需 10–20 秒…",
+        "site.try": "不知道从哪开始？点一个看看报告长什么样。按钮上的分数是当天榜单数据，"
+                   "点开会重新实测一次，所以可能差一两分：",
+        "site.ex_at": "UCP {v}",
+        "site.ex_lag": "UCP {v}（版本滞后）",
+        "site.ex_none": "未部署 UCP",
         "site.lb_link": "查看榜单（225 家电商站实测）→",
         "site.tr_link": "趋势",
         "site.cr_link": "爬虫",

@@ -14,6 +14,15 @@ button { padding: 11px 20px; font-size: 15px; border: 0; border-radius: 6px;
          background: #111; color: #fff; cursor: pointer; }
 button:hover { background: #333; }
 
+/* 示例按钮。跟主按钮相反：白底描边，因为它不是主操作，是"先看看"的入口 */
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+.examples button.ex { background: #fff; color: var(--fg); border: 1px solid var(--line);
+                      text-align: left; padding: 9px 14px; line-height: 1.35; }
+.examples button.ex:hover { border-color: #111; background: #fafafa; }
+.examples button.ex b { display: block; font-weight: 600; font-size: 14px; }
+.examples button.ex span { display: block; font-size: 12px; color: var(--mut);
+                           font-family: ui-monospace, monospace; }
+
 .score { font-size: 52px; font-weight: 700; line-height: 1; margin: 24px 0 6px; }
 .score span { font-size: 18px; font-weight: 400; color: var(--mut); }
 .score.good { color: var(--good); } .score.mid { color: var(--mid); } .score.bad { color: var(--bad); }

@@ -27,6 +27,7 @@
   <input id="u" type="text" placeholder="{{site.placeholder}}" autocomplete="off" required>
   <button type="submit">{{site.button}}</button>
 </form>
+{{examples}}
 <p class="sub"><a href="/leaderboard{{qs}}">{{site.lb_link}}</a></p>
 <p class="sub">
   <a href="/trend{{qs}}">{{site.tr_link}}</a> ·
@@ -97,9 +98,7 @@ function render(r){
     ${fixes?`<h3>${esc(T('rep.fixes'))}</h3><ul class="fix">${fixes}</ul>`:''}`;
 }
 
-document.getElementById('f').addEventListener('submit', async e => {
-  e.preventDefault();
-  const url = document.getElementById('u').value.trim();
+async function scan(url){
   const out = document.getElementById('out');
   out.innerHTML = '<p class="note">' + esc(T('site.scanning')) + '</p>';
   try {
@@ -110,7 +109,17 @@ document.getElementById('f').addEventListener('submit', async e => {
   } catch (err) {
     out.innerHTML = `<div class="err">✗ ${esc(fill(T('site.req_failed'), {err:err.message}))}</div>`;
   }
+}
+
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  scan(document.getElementById('u').value.trim());
 });
+
+document.querySelectorAll('.ex').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('u').value = b.dataset.url;
+  scan(b.dataset.url);
+}));
 </script>
 </body>
 </html>

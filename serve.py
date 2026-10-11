@@ -212,6 +212,45 @@ CORR_JS = """
 """
 
 
+# 首页示例：三个对比鲜明的真站，让新访客不用自己想 URL 就能看到报告长什么样。
+# 分数和 UCP 版本都从当天 batch.json 现取——写死的话第二天就变成错数字
+#（anker 这种"装了但版本滞后"的例子，滞后状态本身也会变）。
+EXAMPLES = [("allbirds.com", "best"), ("anker.com", "lag"),
+            ("lamarzoccousa.com", "none")]
+
+
+def example_block(lang):
+    e = html.escape
+    try:
+        rows = json.load(open(BATCH, encoding="utf-8"))["rows"]
+    except Exception:
+        return ""
+    by = {}
+    for r in rows:
+        h = urlparse(r.get("site") or "").netloc.lower()
+        by[h[4:] if h.startswith("www.") else h] = r
+    out = []
+    for host, kind in EXAMPLES:
+        r = by.get(host)
+        # 首页不可达的站点了会报错，当例子没有意义
+        if not r or r.get("error") or r.get("home_status") != 200:
+            continue
+        v = r.get("ucp")
+        if v and kind == "lag":
+            tag = S.t("site.ex_lag", lang, v=v)
+        elif v:
+            tag = S.t("site.ex_at", lang, v=v)
+        else:
+            tag = S.t("site.ex_none", lang)
+        out.append(f"<button type='button' class='ex' data-url='{e(r['site'])}'>"
+                   f"<b>{e(host)}</b><span>{r.get('score')}/100 · {e(tag)}</span>"
+                   f"</button>")
+    if not out:
+        return ""
+    return (f"<p class='sub'>{e(S.t('site.try', lang))}</p>"
+            f"<div class='examples'>{''.join(out)}</div>")
+
+
 def render_page(name, lang):
     """静态页是模板：先填运行时值（语言、查询串、给 JS 用的文案），再套文案表。"""
     raw = open(os.path.join(WEB, name), encoding="utf-8").read()
@@ -225,6 +264,8 @@ def render_page(name, lang):
         "alt_href": "/?lang=zh" if lang == S.DEFAULT else "/",
         "alt_lang": "中文" if lang == S.DEFAULT else "English",
     }
+    if "{{examples}}" in raw:          # 只有首页用得到，别给每页都读一遍 batch.json
+        vals["examples"] = example_block(lang)
     for k, v in vals.items():
         raw = raw.replace("{{" + k + "}}", str(v))
     return S.render_template(raw, lang)
