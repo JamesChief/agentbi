@@ -332,6 +332,7 @@ def render_leaderboard(lang=S.DEFAULT):
     rows = data["rows"]
     ok = [r for r in rows if not r.get("error")]
     reach = [r for r in ok if r.get("home_status") == 200]
+    un = [r for r in ok if r.get("home_status") != 200]
     plat = {}
     for r in reach:
         plat.setdefault(r["platform"], []).append(r)
@@ -434,7 +435,6 @@ def render_leaderboard(lang=S.DEFAULT):
     when = data.get("generated_at")
     date = time.strftime("%Y-%m-%d", time.gmtime(when)) if when else "—"
     n403 = sum(1 for r in rows if r.get("home_status") == 403)
-    un = [r for r in ok if r.get("home_status") != 200]
     L.append(f"<h2>{html.escape(S.t('lb.method', lang))}</h2>")
     L.append("<ul class='note'>")
     L.append("<li>" + S.t("lb.m1", lang, date=date, scanned=len(rows), reach=len(reach),
@@ -463,22 +463,118 @@ def render_leaderboard(lang=S.DEFAULT):
                               ucp_delta=delta(pu, cu)) + "</li>")
     L.append("</ul>")
 
-    L.append("<h2>" + S.t("lb.detail", lang, reach=len(reach), scanned=len(rows)) + "</h2>")
+    # ---- 4. 分数段分布 ------------------------------------------------------
+    # 分母只取 reach（首页 200）。把连不上的算 0 会让整批数据沉底，而那个平均数
+    # 反映的是"我们的出口 IP 信誉"，不是站点属性——首页那个 9 分就是这么来的。
+    L.append(f"<h2>{html.escape(S.t('lb.h_dist', lang))}</h2>")
+    L.append(f"<p class='note'>{S.t('lb.dist_note', lang, n=len(reach), un=len(un))}</p>")
     L.append("<table><tr>"
-             f"<th>{html.escape(S.t('lb.th_site', lang))}</th>"
-             f"<th>{html.escape(S.t('lb.th_platform', lang))}</th>"
-             f"<th>{html.escape(S.t('lb.th_avg', lang))}</th>"
-             f"<th>{html.escape(S.t('lb.th_ucp', lang))}</th></tr>")
+             f"<th>{html.escape(S.t('lb.th_score', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_n', lang))}</th>"
+             f"<th>{html.escape(S.t('lb.th_share', lang))}</th></tr>")
+    for lo, hi in ((90, 100), (70, 89), (50, 69), (30, 49), (0, 29)):
+        c = sum(1 for r in reach if lo <= r["score"] <= hi)
+        pct = round(100 * c / len(reach)) if reach else 0
+        L.append(f"<tr><td>{html.escape(S.t('lb.dist_band', lang, lo=lo, hi=hi))}</td>"
+                 f"<td>{c}</td><td>{pct}%</td></tr>")
+    L.append("</table>")
+
+    # ---- 5. 明细：筛选 + 排序（纯前端，不增加任何服务端成本）------------------
+    L.append("<h2>" + S.t("lb.detail", lang, reach=len(reach), scanned=len(rows)) + "</h2>")
+    ph = html.escape(S.t("lb.search_ph", lang))
+    L.append(f"<input type='search' id='lb-q' class='lb-search' placeholder=\"{ph}\" "
+             f"aria-label=\"{ph}\" autocomplete='off'>")
+    L.append("<p class='note' id='lb-count' role='status'></p>")
+    L.append("<table id='lb-detail'><thead><tr>"
+             f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_site', lang))}</th>"
+             f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_platform', lang))}</th>"
+             f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_avg', lang))}</th>"
+             f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_ucp', lang))}</th>"
+             "</tr></thead><tbody>")
     dash = S.t("lb.dash", lang)
     for r in sorted(reach, key=lambda r: -r["score"]):
         L.append(f"<tr><td>{html.escape(r['site'].replace('https://',''))}</td>"
                  f"<td>{html.escape(r['platform'])}</td><td>{r['score']}</td>"
                  f"<td>{html.escape(r['ucp'] or dash)}</td></tr>")
-    L.append("</table>")
+    L.append("</tbody></table>")
+    # 脚本内联而不是另开 lb.js：部署清单漏掉一个文件会静默出错（S.t 拿不到 key
+    # 就原样返回 key 名，页面照常 200），少一个文件就少一处这类风险。
+    L.append("<script>window.__LB_L=" + json.dumps({
+        "all": S.t("lb.search_all", lang),
+        "hit": S.t("lb.search_hit", lang),
+        "none": S.t("lb.search_none", lang),
+    }, ensure_ascii=False) + ";</script>")
+    L.append("<script>" + _LB_SCRIPT + "</script>")
     if un:
         L.append(f"<p class='note'>{S.t('lb.note_unreach', lang, n=len(un))}</p>")
     _LB["mtime"], _LB[lang] = mt, "\n".join(L)
     return _LB[lang]
+
+
+# 榜单明细的筛选/排序。纯 DOM 操作，不发请求——225 行全在页面里，
+# 放服务端做等于给每次输入都加一次往返和一个限流桶。
+_LB_SCRIPT = """
+(function () {
+  var t = document.getElementById('lb-detail');
+  if (!t) return;
+  var body = t.tBodies[0];
+  var rows = Array.prototype.slice.call(body.rows);
+  var q = document.getElementById('lb-q');
+  var out = document.getElementById('lb-count');
+  var L = window.__LB_L || {};
+  var total = rows.length;
+
+  function cell(r, i) { return (r.cells[i].textContent || '').trim(); }
+
+  function filter() {
+    var s = (q.value || '').trim().toLowerCase(), n = 0, i;
+    for (i = 0; i < rows.length; i++) {
+      var hit = !s || rows[i].textContent.toLowerCase().indexOf(s) >= 0;
+      rows[i].hidden = !hit;
+      if (hit) n++;
+    }
+    out.textContent = !s ? L.all.replace('{n}', n)
+      : (n ? L.hit.replace('{n}', n).replace('{total}', total)
+           : L.none.replace('{q}', s));
+  }
+
+  var dir = {};
+  function sort(col) {
+    var i, num = true;
+    for (i = 0; i < rows.length; i++) {
+      var v = cell(rows[i], col);
+      if (v !== '' && !/^-?\\d+$/.test(v)) { num = false; break; }
+    }
+    // 数字列先降序（榜单是"高分在前"），文本列先 A→Z
+    dir[col] = dir[col] === undefined ? !num : !dir[col];
+    var asc = dir[col];
+    rows.sort(function (a, b) {
+      var x = cell(a, col), y = cell(b, col);
+      var c = num ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : x.localeCompare(y);
+      return asc ? c : -c;
+    });
+    for (i = 0; i < rows.length; i++) body.appendChild(rows[i]);
+    var hs = t.tHead.rows[0].cells;
+    for (i = 0; i < hs.length; i++) {
+      hs[i].setAttribute('aria-sort',
+        i === col ? (asc ? 'ascending' : 'descending') : 'none');
+    }
+  }
+
+  var hs = t.tHead.rows[0].cells, i;
+  for (i = 0; i < hs.length; i++) {
+    (function (col) {
+      hs[col].tabIndex = 0;
+      hs[col].addEventListener('click', function () { sort(col); });
+      hs[col].addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sort(col); }
+      });
+    })(i);
+  }
+  q.addEventListener('input', filter);
+  filter();
+})();
+"""
 
 
 # ---- /trend 历史趋势（板块 2）--------------------------------------------

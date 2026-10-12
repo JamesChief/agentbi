@@ -44,6 +44,14 @@ code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 13p
 footer { margin-top: 50px; padding-top: 14px; border-top: 1px solid var(--line);
          color: var(--mut); font-size: 13px; }
 
+/* 榜单明细：筛选 + 排序。225 行已在页面里，交互全在前端 */
+.lb-search { display: block; width: 100%; max-width: 340px; margin: 10px 0 0; }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { background: #f0f0f0; }
+th.sortable[aria-sort='ascending']::after { content: " ▲"; color: var(--mut); }
+th.sortable[aria-sort='descending']::after { content: " ▼"; color: var(--mut); }
+table tr[hidden] { display: none; }
+
 /* 订阅框。别用 .sub——那是站点副标题的 class。 */
 .subscribe { margin: 26px 0; padding: 16px 18px; border: 1px solid var(--line);
              border-radius: 8px; background: #fcfcfc; }

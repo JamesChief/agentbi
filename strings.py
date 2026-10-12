@@ -130,6 +130,18 @@ STR = {
                  "egress reputation, so quote these numbers with their snapshot date.",
         "lb.detail": "Detail (evaluable {reach} / scanned {scanned})",
         "lb.th_site": "Site",
+        # 分数段分布：分母必须写在标题旁边，否则"中位数 9 分"那类误读会再来一次
+        "lb.h_dist": "Score distribution",
+        "lb.th_score": "Score",
+        "lb.th_share": "Share",
+        "lb.dist_note": "Bands of the {n} evaluable stores only. The {un} that did not return "
+                        "200 are <b>not</b> in any band — scoring them 0 would sink the "
+                        "average and say nothing about any individual store.",
+        "lb.dist_band": "{lo}–{hi}",
+        "lb.search_ph": "Filter by site, platform or UCP version…",
+        "lb.search_all": "Showing all {n} evaluable stores.",
+        "lb.search_hit": "Showing {n} of {total} after filtering.",
+        "lb.search_none": "No store matches “{q}”.",
         "lb.note_unreach": "{n} sites returned non-200 to the scanner (mostly WAF blocks). "
                           "That is not a judgement on their agent-readiness; they are not "
                           "counted here.",
@@ -532,6 +544,16 @@ STR = {
                  "（对方 WAF 策略与我们的出口 IP 信誉都在变），所以引用本站数字时请带上快照日期。",
         "lb.detail": "明细（可评估 {reach} / 扫描 {scanned}）",
         "lb.th_site": "站点",
+        "lb.h_dist": "分数段分布",
+        "lb.th_score": "分数",
+        "lb.th_share": "占比",
+        "lb.dist_note": "只统计可评估的 {n} 家。返回非 200 的 {un} 家<b>不</b>进入任何分数段"
+                        "——把它们计为 0 分会拉低整体，且不说明任何一家站点的真实情况。",
+        "lb.dist_band": "{lo}–{hi}",
+        "lb.search_ph": "按站点、平台或 UCP 版本筛选…",
+        "lb.search_all": "显示全部 {n} 家可评估站点。",
+        "lb.search_hit": "筛选出 {n} / {total} 家。",
+        "lb.search_none": "没有匹配“{q}”的站点。",
         "lb.note_unreach": "{n} 个站点对探测器返回非 200（多为 WAF 拦截），"
                           "不代表其 agent 友好度低，未计入榜单。",
         "lb.no_data": "还没有榜单数据",
