@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#165DFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00C6FF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="aGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E0F7FF;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 圆角方形背景 -->
+  <rect x="2" y="2" width="60" height="60" rx="14" ry="14" fill="url(#bgGradient)"/>
+  
+  <!-- 装饰性节点连接 - 体现AI/Agent网络 -->
+  <g opacity="0.3">
+    <circle cx="14" cy="14" r="2" fill="white"/>
+    <circle cx="50" cy="14" r="2" fill="white"/>
+    <circle cx="14" cy="50" r="2" fill="white"/>
+    <circle cx="50" cy="50" r="2" fill="white"/>
+    <line x1="14" y1="14" x2="32" y2="20" stroke="white" stroke-width="1"/>
+    <line x1="50" y1="14" x2="32" y2="20" stroke="white" stroke-width="1"/>
+    <line x1="14" y1="50" x2="32" y2="44" stroke="white" stroke-width="1"/>
+    <line x1="50" y1="50" x2="32" y2="44" stroke="white" stroke-width="1"/>
+  </g>
+  
+  <!-- 字母A主体 -->
+  <g filter="url(#glow)">
+    <!-- A的左斜杠 -->
+    <path d="M20 46 L30 18 L34 18 L44 46 L38 46 L35.5 38 L28.5 38 L26 46 Z" 
+          fill="url(#aGradient)"/>
+    <!-- A的横杠 -->
+    <rect x="29" y="32" width="10" height="3.5" rx="1" fill="url(#aGradient)"/>
+  </g>
+  
+  <!-- 中心点 - Agent智能核心 -->
+  <circle cx="34" cy="28" r="2.5" fill="#FFD700" opacity="0.9"/>
+  
+  <!-- "i"的点 - 代表bi/intelligence -->
+  <circle cx="45" cy="20" r="2" fill="white" opacity="0.8"/>
+</svg>

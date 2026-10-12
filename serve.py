@@ -48,6 +48,12 @@ _sem = threading.Semaphore(6)          # 同时最多 6 个检测（I/O 密集�
 _sem_wait = 2                          # 等不到位置就明确报忙，别让用户干等着转圈
 _LB = {"mtime": 0.0, "html": ""}       # 榜单渲染结果缓存：每次请求渲染 225 行没必要
 
+# 图标声明。ico 是兜底（老浏览器、以及分享/抓取只看这一个），SVG 给支持的浏览器。
+# 顺序有讲究：浏览器取最后一个它支持的，所以 SVG 放后面。浏览器本来就会自动请求
+# /favicon.ico，显式声明是为了让 SVG 那层也能生效。
+_ICONS = ("<link rel='icon' href='/favicon.ico' sizes='any'>"
+          "<link rel='icon' href='/icon.svg' type='image/svg+xml'>")
+
 URL_RE = re.compile(r"^https?://[^\s<>\"]{4,200}$", re.I)
 # 刻意宽松：邮箱地址的合法形态太多，严格校验只会误杀。真正的确认是收信，不是正则。
 EMAIL_RE = re.compile(r"^[^@\s,;]{1,64}@[^@\s,;]+\.[^@\s,;.]{2,}$")
@@ -1048,7 +1054,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='canonical' href='https://agentbi.tech/leaderboard'>"
                 f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/leaderboard'>"
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/leaderboard?lang=zh'>"
-                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"{_ICONS}<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('lb.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('lb.back', lang))}</a> · "
                 f"<a href='#correct'>{e(S.t('corr.link', lang))}</a> · "
@@ -1077,7 +1083,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='canonical' href='https://agentbi.tech/trend'>"
                 f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/trend'>"
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/trend?lang=zh'>"
-                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"{_ICONS}<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('tr.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
                 f"<a href='/leaderboard{self._qs(lang)}'>{e(S.t('site.lb_link', lang))}</a> · "
@@ -1102,7 +1108,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='canonical' href='https://agentbi.tech/crawlers'>"
                 f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/crawlers'>"
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/crawlers?lang=zh'>"
-                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"{_ICONS}<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('cr.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
                 f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
@@ -1127,7 +1133,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='canonical' href='https://agentbi.tech/protocols'>"
                 f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/protocols'>"
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/protocols?lang=zh'>"
-                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"{_ICONS}<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('pr.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
                 f"<a href='/trend{self._qs(lang)}'>{e(S.t('site.tr_link', lang))}</a> · "
@@ -1152,7 +1158,7 @@ class H(SimpleHTTPRequestHandler):
                 f"<link rel='canonical' href='https://agentbi.tech/categories'>"
                 f"<link rel='alternate' hreflang='en' href='https://agentbi.tech/categories'>"
                 f"<link rel='alternate' hreflang='zh' href='https://agentbi.tech/categories?lang=zh'>"
-                f"<link rel='stylesheet' href='/style.css'></head><body>"
+                f"{_ICONS}<link rel='stylesheet' href='/style.css'></head><body>"
                 f"<h1>{e(S.t('cat.title', lang))}</h1>"
                 f"<p><a href='/{self._qs(lang)}'>{e(S.t('tr.back', lang))}</a> · "
                 f"<a href='/protocols{self._qs(lang)}'>{e(S.t('site.pr_link', lang))}</a> · "
