@@ -43,6 +43,10 @@ def ucp_fields(u):
     分开报——不能折成一个"没部署"，否则不同普查的数字没法放在一张表里。"""
     return {
         "ucp": u["version"] if u["present"] else None,
+        # frame 的 row 2 = 200 + 解析为 JSON，不含"声明版本"这一层。
+        # 我们的阳性多要求 ucp.version，两者今天可能相等、明天可能不等，
+        # 合进 ucp 一个字段就再也分不开了（ucp#867 的 runs 表要的就是这两个数）。
+        "ucp_parsed": bool(u["present"]),
         "ucp_status": u["status"],
         "ucp_ctype": u["ctype"],
         "ucp_is_html": bool(u["is_html"]),

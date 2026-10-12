@@ -288,6 +288,9 @@ STR = {
                           "ucp#867</a>. Nothing here is an adoption rate.",
         "lb.th_bucket": "Response",
         "lb.b_pos": "200 + parses → positive",
+        # 与 frame 的 row 2 对齐：解析成功这一层单独成桶，因为我们的阳性还多要一个
+        # ucp.version。两个口径今天可能相等、明天可能不等，混在一起就看不出来。
+        "lb.b_row2": "200 + parses as JSON, but declares no ucp.version",
         "lb.b_noparse": "200 but does not parse (could not ask)",
         "lb.b_3xx": "3xx at profile path (not followed)",
         "lb.b_robots": "refused by robots.txt (not requested)",
@@ -678,6 +681,7 @@ STR = {
                           "这里没有任何一个数字是采用率。",
         "lb.th_bucket": "响应",
         "lb.b_pos": "200 且可解析 → 阳性",
+        "lb.b_row2": "200 且解析为 JSON，但未声明 ucp.version",
         "lb.b_noparse": "200 但解析不了（无法询问）",
         "lb.b_3xx": "profile 路径返回 3xx（未跟随）",
         "lb.b_robots": "被 robots.txt 拒绝（未发起请求）",

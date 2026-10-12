@@ -350,6 +350,12 @@ def render_leaderboard(lang=S.DEFAULT):
         if r.get("ucp_robots_refused"):
             return "robots"
         if s == 200:
+            # frame 的 row 2 只要求"解析为 JSON"，我们的阳性还多要 ucp.version。
+            # 这两层分开设桶：今天它们数值相等，明天可能不等，合一处就看不出来。
+            # ucp_parsed 自 2026-10-12 起才有，老快照没有这个字段 → 一律落 noparse，
+            # 与改动前一致（缺字段按"未测量"处理，不按 0 处理）。
+            if r.get("ucp_parsed"):
+                return "row2"
             return "noparse"
         # 3xx 单独成桶：规范说 profile 端点 MUST NOT 用重定向、实现 MUST NOT 跟随
         # （ucp#904，frmoretto）。跟随了就分不清"部署了但重定向"和"没部署"。
@@ -367,7 +373,7 @@ def render_leaderboard(lang=S.DEFAULT):
             return "err"
         return "other"
 
-    order = [("pos", "b_pos"), ("noparse", "b_noparse"), ("3xx", "b_3xx"),
+    order = [("pos", "b_pos"), ("row2", "b_row2"), ("noparse", "b_noparse"), ("3xx", "b_3xx"),
              ("robots", "b_robots"),
              ("404", "b_404"),
              ("410", "b_410"), ("403", "b_403"), ("rate", "b_rate"),
