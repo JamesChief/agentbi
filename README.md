@@ -3,7 +3,7 @@
 **Is your website reachable, readable, and purchasable by an AI agent?**
 
 - Web: <https://agentbi.tech> — paste a URL, get a report
-- CLI: `python3 agentbi.py https://your-store.com`
+- CLI: `agentbi https://your-store.com`
 
 Agentic commerce protocols (UCP / ACP / AP2) shipped in 2025–2026. This answers a
 much more boring question: **how many sites have actually deployed any of it**, and
@@ -30,11 +30,14 @@ Scoring is **heuristic**. It is for seeing the gap, not for auditing a site.
 ## Install
 
 ```bash
-pip install requests          # the only dependency
-python3 agentbi.py https://your-store.com          # human-readable report
-python3 agentbi.py https://your-store.com --json   # machine-readable
-python3 agentbi.py https://your-store.com --no-probe   # static checks only, no multi-UA probing
+pip install agentbi           # or: uvx agentbi <url>  (nothing installed permanently)
+
+agentbi https://your-store.com          # human-readable report
+agentbi https://your-store.com --json   # machine-readable
+agentbi https://your-store.com --no-probe   # static checks only, no multi-UA probing
 ```
+
+From a clone (no install): `python3 agentbi.py https://your-store.com` — same flags.
 
 Web version (stdlib only):
 
@@ -77,7 +80,7 @@ Custom stacks 35 → 1 (avg 14). Two stores were one UCP version behind.
 
 English by default (the audience is store owners, mostly non-Chinese).
 `?lang=zh` on the site, `--lang zh` on the CLI. All user-facing strings live in
-`strings.py` — **add keys in both languages**, a missing key silently falls back to English.
+`agentbi_strings.py` — **add keys in both languages**, a missing key silently falls back to English.
 
 ## Crawling behaviour
 

@@ -23,7 +23,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-import strings as S
+import agentbi_strings as S
 
 # 对外服务时用于内容抓取的诚实标识（用户 2026-10-05 决定：不用伪装 UA）。
 # 上线前把 SCANNER_CONTACT 换成真实域名。
@@ -815,8 +815,15 @@ def render(r, lang=S.DEFAULT):
     return "\n".join(L)
 
 
-if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="网站的 AI agent 友好度检测 / AI-agent readiness scanner")
+def main(argv=None):
+    """CLI 入口。setuptools 的 console_scripts 指向这里（`agentbi` 命令）。
+
+    抽成函数是为了让 `pip install` 之后能不带 .py 直接跑；`python3 agentbi.py`
+    的用法不变。
+    """
+    ap = argparse.ArgumentParser(
+        prog="agentbi",
+        description="网站的 AI agent 友好度检测 / AI-agent readiness scanner")
     ap.add_argument("url")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-probe", action="store_true", help="跳过多 UA 探测 / skip the multi-UA probe")
@@ -824,6 +831,10 @@ if __name__ == "__main__":
     ap.add_argument("--product-url", help="指定商品页 URL / use this product page")
     ap.add_argument("--timeout", type=int, default=15)
     ap.add_argument("--lang", default=S.DEFAULT, choices=S.LANGS, help="report language")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     res = run(a.url, a.timeout, not a.no_probe, a.discover, a.product_url, lang=a.lang)
     print(json.dumps(res, ensure_ascii=False, indent=1) if a.json else render(res, a.lang))
+
+
+if __name__ == "__main__":
+    main()

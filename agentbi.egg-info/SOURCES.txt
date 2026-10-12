@@ -1,0 +1,11 @@
+LICENSE
+README.md
+agentbi.py
+agentbi_strings.py
+pyproject.toml
+agentbi.egg-info/PKG-INFO
+agentbi.egg-info/SOURCES.txt
+agentbi.egg-info/dependency_links.txt
+agentbi.egg-info/entry_points.txt
+agentbi.egg-info/requires.txt
+agentbi.egg-info/top_level.txt

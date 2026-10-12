@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 import agentbi as A
 import categories as C
-import strings as S
+import agentbi_strings as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")

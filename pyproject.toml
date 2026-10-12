@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentbi"
+version = "0.1.0"
+description = "Is your website reachable, readable and purchasable by an AI agent?"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "AgentBI contributors" }]
+# 只声明真正用到的：requests 是唯一第三方依赖，检测器本身 stdlib 为主。
+dependencies = ["requests>=2.25"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+]
+
+[project.urls]
+Homepage = "https://agentbi.tech"
+Repository = "https://github.com/JamesChief/agentbi"
+Leaderboard = "https://agentbi.tech/leaderboard"
+
+[project.scripts]
+agentbi = "agentbi:main"
+
+# 两个顶层模块（不是包）。文案表不能叫 strings —— 那是个过于通用的顶层名，
+# 装进用户 site-packages 会跟同名包互相覆盖。
+[tool.setuptools]
+py-modules = ["agentbi", "agentbi_strings"]
