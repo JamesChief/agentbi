@@ -63,6 +63,9 @@ def ucp_fields(u):
         "ucp_cache_public": bool(u.get("cache_public")),
         "ucp_has_validator": bool(u.get("has_validator")),
         "ucp_services": list(u["services"]),
+        # ask capability（dev.ucp.common.ask）：10-07 进 main、没进 v2026-08-25，
+        # 所以今天全 False。老快照没有这个字段 → 一律按"未测量"，不按 False。
+        "ucp_ask": bool(u.get("ask")),
     }
 
 

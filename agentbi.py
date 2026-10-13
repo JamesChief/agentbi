@@ -414,6 +414,10 @@ def probe_agents(url, timeout=15, delay=0.5):
 # /.well-known/ucp → application/json，含 version / supported_versions / services。
 # ACP / AP2 的站点侧标识尚未核实，只做证据探针、不计分。
 UCP_PATH = "/.well-known/ucp"
+# ask capability：自然语言问答，2026-10-07 合入 main（PR #538），**不在 v2026-08-25 里**，
+# 所以它今天在所有站点上都是 False。记它是为了它开始出现那天能第一时间看见——
+# 规范先动、站点后跟，这个错位只有每日重扫才看得到。
+ASK_CAPABILITY = "dev.ucp.common.ask"
 UNVERIFIED_PROTO_PATHS = ["/.well-known/acp", "/.well-known/agent-commerce.json"]
 PROTO_TOKENS = re.compile(r'\b(acp|ucp|ap2|agentic[- ]commerce)\b', re.I)
 
@@ -424,7 +428,7 @@ def check_ucp(origin, ua, timeout=12, robots_text=None):
            "supported_versions": [], "services": {}, "endpoints": [], "raw_bytes": 0,
            "ctype": "", "final_url": "", "redirected": False,
            "redirect_3xx": False, "location": None, "location_host": None,
-           "keys_field": None, "robots_refused": False,
+           "keys_field": None, "robots_refused": False, "ask": False,
            # ucp#867 frame v3 要求：429 要带 Retry-After 值；hosting 行要 Cache-Control
            # public + max-age>=60 与 ETag/Last-Modified。都从同一份响应头里取，不额外发请求。
            "retry_after": None, "cache_public": False, "has_validator": False}
@@ -471,6 +475,10 @@ def check_ucp(origin, ua, timeout=12, robots_text=None):
     out["keys_field"] = ("signing_keys" if "signing_keys" in u
                          else "keys" if "keys" in u else None)
     out["supported_versions"] = sorted(u.get("supported_versions", {}) or {}, reverse=True)
+    # ask 绑在 dev.ucp.common 服务上（不是某个垂直服务），声明位置可能是 capabilities
+    # 也可能是 services，两边都看——只猜一边的话，猜错了就是永远测不到。
+    declared = list(u.get("services") or {}) + list(u.get("capabilities") or {})
+    out["ask"] = ASK_CAPABILITY in declared
     for name, entries in (u.get("services") or {}).items():
         if isinstance(entries, list):
             out["services"][name] = [{"version": e.get("version"),
