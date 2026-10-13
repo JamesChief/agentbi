@@ -1274,6 +1274,21 @@ class H(SimpleHTTPRequestHandler):
                 return self._json({"error": "site required"}, 400)
             return self._json({"site": site, "history": _site_history(site)})
 
+        if u.path == "/batch.json":
+            # 当天跑批的原始结果，逐行带全字段——#867 的框架要的就是"别人能自己
+            # 重算这一行"。只发今天这一份：历史快照不提供整包下载。
+            try:
+                with open(BATCH, "rb") as f:
+                    raw = f.read()
+            except OSError:
+                return self._json({"error": "batch unavailable"}, 503)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=1800")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            return self.wfile.write(raw)
+
         if u.path in ("/about", "/about.html"):
             return self._send_page("about.html", lang)
 
