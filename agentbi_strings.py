@@ -356,7 +356,10 @@ STR = {
         "about.h_data": "Data",
         "about.p_data": "Results are published on the leaderboard. Only sites returning 200 are "
                         "counted; sites returning non-200 (mostly enterprise WAFs) are absent "
-                        "and are not read as \"low agent-readiness\".",
+                        "and are not read as \"low agent-readiness\". The run is daily and the "
+                        "raw result — every field, one row per store — is public at "
+                        "<a href=\"/batch.json\">agentbi.tech/batch.json</a>, so any number "
+                        "here can be recomputed.",
         "about.back": "← Back to scanning",
 
         "og.site_name": "AgentBI",
@@ -741,7 +744,9 @@ STR = {
         "about.h_data": "数据",
         "about.p_data": "检测结果会被公开收录进榜单。榜单只统计返回 200 的站点；对探测器返回非 200 的"
                         "站点（多为企业级 WAF 拦截）不会出现在榜单里，也不会被解读为「该站 "
-                        "agent 友好度低」。",
+                        "agent 友好度低」。每天重扫一次，原始结果（每个站一行、全字段）公开在 "
+                        "<a href=\"/batch.json\">agentbi.tech/batch.json</a>，"
+                        "这里的任何数字都可以自己重算。",
         "about.back": "← 返回检测",
 
         "og.site_name": "AgentBI",

@@ -67,12 +67,23 @@ These are the ones that matter; the leaderboard page says the same thing.
 
 ## Data
 
-`batch.json` — 225 online stores scanned 2026-10-05 (115 evaluable), with per-site
-platform, score, UCP version, JSON-LD and llms.txt findings. Rendered at
-<https://agentbi.tech/leaderboard>.
+**The run is daily and the raw result is public:**
+<https://agentbi.tech/batch.json> — one file, no key, 225 stores, every field we
+measure (including the per-row `probed_host` / `settled_host` / `host_unsettled`
+and the UCP status, content-type, 3xx target and cache headers behind each
+outcome). Rendered at <https://agentbi.tech/leaderboard>.
 
-Headline: Shopify 69 stores → 59 with UCP (86%), avg 78. WooCommerce 8 → 0, avg 28.
-Custom stacks 35 → 1 (avg 14). Two stores were one UCP version behind.
+That file is **today's run only**. `batch.json` in this repo is a dated snapshot,
+not the live one — check `generated_at` before quoting anything from it.
+
+Headline as of the 2026-10-13 run: 225 stores scanned, 130 evaluable (homepage
+returned 200), avg score 51. Of those, Shopify 68 → 57 with UCP (84%),
+WooCommerce 10 → 0, SalesforceCC 7 → 0, unclassified 45 → 1.
+
+If you are reporting UCP numbers against a shared frame, note that our positive
+is `/.well-known/ucp` answering 200, **parsing as JSON** and **declaring
+`ucp.version`** — the parse-only count is published separately as `ucp_parsed`,
+because the two are not the same measurement and can diverge.
 
 ---
 
