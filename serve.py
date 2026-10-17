@@ -300,7 +300,7 @@ def llms_txt():
     rows = d.get("rows") or []
     reach = sum(1 for r in rows if r.get("home_status") == 200)
     ucp = sum(1 for r in rows if r.get("ucp_parsed"))
-    day = time.strftime("%Y-%m-%d", time.gmtime(d.get("generated_at") or time.time()))
+    day = batch_day(d)
     v = d.get("vantage") or {}
     where = v.get("country") or "unknown"
     head = (f"{len(rows)} storefronts scanned once a day from {where}; every measurement "
@@ -338,6 +338,39 @@ def llms_txt():
         "- Scores are heuristic, not an audit. See /about.",
         "",
     ])
+
+
+def summary_json():
+    """给外部消费者（Omarchy 状态栏插件等）的极简摘要。
+
+    为了在状态栏显示一个分数去下载 245KB 的 batch.json 太浪费，这里只发头条数字；
+    要逐行复核仍然去 /batch.json。日期用 +0800（扫描器的本地日），与 README、
+    llms.txt 的口径一致——批次在 03:30 +0800 跑，UTC 日期会落前一天。
+    """
+    d = _batch()
+    rows = d.get("rows") or []
+    ev = [r for r in rows if r.get("home_status") == 200]
+    return json.dumps({
+        "day": batch_day(d),
+        "generated_at": d.get("generated_at"),
+        "sites": len(rows),
+        "evaluable": len(ev),
+        "avg_score": round(sum(r.get("score") or 0 for r in ev) / len(ev)) if ev else None,
+        "ucp_row2": sum(1 for r in rows if r.get("ucp_parsed")),
+        "ucp_row2_version": sum(1 for r in rows if r.get("ucp")),
+        "llms": sum(1 for r in ev if r.get("llms")),
+        "unreachable": len(rows) - len(ev),
+        # 对照 UA 过得去、本扫描器过不去 = 站点放真人浏览器、挡脚本/agent
+        "ctrl_blocks": sum(1 for r in rows
+                           if r.get("home_status") != 200 and r.get("home_ctrl_status") == 200),
+        "source": "https://agentbi.tech/batch.json",
+    }, ensure_ascii=False)
+
+
+def batch_day(d):
+    """批次所属的那一天（+0800）。每日批 03:30 +0800 跑，UTC 会落前一天。"""
+    return time.strftime("%Y-%m-%d",
+                         time.gmtime((d.get("generated_at") or time.time()) + 8 * 3600))
 
 
 def sitemap_xml():
@@ -1388,6 +1421,10 @@ class H(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             return self.wfile.write(raw)
+
+        if u.path == "/summary.json":
+            return self._send_plain(summary_json(), "application/json; charset=utf-8",
+                                    "public, max-age=1800")
 
         if u.path in ("/about", "/about.html"):
             return self._send_page("about.html", lang)
