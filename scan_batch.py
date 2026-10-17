@@ -151,6 +151,36 @@ def one(url, do_probe):
         return {"site": url, "error": f"{type(e).__name__}: {e}"}
 
 
+# 对照请求的间隔。403 站里混着限流（实测 bombas 三个 UA 全 429 是因为当天 batch 刚扫过），
+# 打太快会把自己挡在外面，而且这里已经是在别人门口多敲一次门了。
+CONTROL_DELAY = 2.0
+
+
+def control_pass(rows):
+    """对首页非 200 的站补发一次**浏览器 UA** 对照请求（同一套头部，只换 UA）。
+
+    目的不是把这些站"救回"进榜单，而是把 403 拆成两桶——现在两者长得一模一样：
+      - 对照也是非 200 → 该站对本扫描器所在的 vantage 关门（与 agent 无关，不给分）
+      - 对照拿到 200   → 该站放真人浏览器、挡脚本/agent，这是真信号，不该算盲区
+    实测（2026-10-18，KR 出口 12 个当日 403 站 ×3 UA）：10 站三 UA 全 403 且字节数一致，
+    只有 rei / sephora 是 Chrome UA 200 而 GPTBot 也 403 —— 没有对照请求看不出这个区别。
+    """
+    n = 0
+    for r in rows:
+        if r.get("error") or r.get("home_status") == 200:
+            continue
+        try:
+            c = A.fetch(r["site"], A.UA_BROWSER, timeout=15)
+            r["home_ctrl_status"] = c["status"]
+            r["home_ctrl_bytes"] = c["bytes"]
+        except Exception:
+            r["home_ctrl_status"] = None
+            r["home_ctrl_bytes"] = None
+        n += 1
+        time.sleep(CONTROL_DELAY)
+    return n
+
+
 def render_leaderboard(rows):
     """把一批结果渲染成榜单 markdown。从 main() 拆出来，好让 --render 能只重渲染、
     不重扫（重扫 225 站要 4 分钟，且会惊动所有站）。"""
@@ -191,11 +221,37 @@ def render_leaderboard(rows):
                  f"{yn(r['availability'])} | {yn(r['llms'])} |")
 
     if unreachable:
+        # 2026-10-18 起每个非 200 站都补了一次浏览器 UA 对照，据此把"我们被挡"和
+        # "站点挡脚本/agent"分开——两者在 home_status 上长得一模一样。
+        blocks_script = [r for r in unreachable if r.get("home_ctrl_status") == 200]
+        vantage_blocked = [r for r in unreachable
+                           if "home_ctrl_status" in r and r["home_ctrl_status"] != 200]
+        unmeasured = [r for r in unreachable if "home_ctrl_status" not in r]
+
         L.append(f"\n## 无法评估（首页非 200，{len(unreachable)}）\n")
-        L.append("这些站对探测器返回了非 200（多为 WAF / 反爬 / 地区限制），"
-                 "**不代表它们 agent 友好度低**，故不计入榜单。\n")
-        for r in sorted(unreachable, key=lambda r: r["home_status"]):
-            L.append(f"- {r['site'].replace('https://', '')} — HTTP {r['home_status']}")
+        L.append("这些站对探测器返回了非 200，**不代表它们 agent 友好度低**，故不计入榜单。"
+                 "每个站都补发过一次浏览器 UA 对照请求（同一套头部，只换 UA），据此分两桶：\n")
+
+        if blocks_script:
+            L.append(f"### 放真人浏览器、挡脚本/agent（{len(blocks_script)}）\n")
+            L.append("对照 UA 拿到 200，本扫描器被挡 —— 这类站是**真的对非浏览器客户端关门**。\n")
+            for r in sorted(blocks_script, key=lambda r: r["home_status"]):
+                L.append(f"- {r['site'].replace('https://', '')} — 本扫描器 HTTP "
+                         f"{r['home_status']} / 浏览器 UA 200")
+            L.append("")
+        if vantage_blocked:
+            L.append(f"### 本扫描器 vantage 不可达（{len(vantage_blocked)}）\n")
+            L.append("浏览器 UA 对照同样非 200 —— 站点对本扫描器所在网络/指纹关门，"
+                     "**与 agent 无关**，这些站的 agent 友好度未知。\n")
+            for r in sorted(vantage_blocked, key=lambda r: r["home_status"]):
+                L.append(f"- {r['site'].replace('https://', '')} — HTTP "
+                         f"{r['home_status']} / 对照 {r['home_ctrl_status']}")
+            L.append("")
+        if unmeasured:
+            L.append(f"### 未做对照（{len(unmeasured)}，老快照）\n")
+            for r in sorted(unmeasured, key=lambda r: r["home_status"]):
+                L.append(f"- {r['site'].replace('https://', '')} — HTTP {r['home_status']}")
+            L.append("")
 
     dead = [r for r in rows if r.get("error")]
     if dead:
@@ -250,6 +306,13 @@ def main():
             rows.append(r)
             tag = "ERR " if r.get("error") else f"{r['score']:3}"
             print(f"  {tag}  {r['site']}", file=sys.stderr)
+
+    n_ctrl = control_pass(rows)
+    ctrl_ok = sum(1 for r in rows
+                  if not r.get("error") and r.get("home_status") != 200
+                  and r.get("home_ctrl_status") == 200)
+    print(f"对照请求 {n_ctrl} 次（非 200 站点补一次浏览器 UA）："
+          f"{ctrl_ok} 家放真人、挡脚本/agent，其余为本扫描器 vantage 不可达", file=sys.stderr)
 
     ok = [r for r in rows if not r.get("error")]
     vantage = detect_vantage()

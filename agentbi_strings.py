@@ -337,13 +337,16 @@ STR = {
         "about.li3": "One check is about 10 requests to your site and takes 15–20 seconds.",
         "about.li4": "<b>One real scan per domain per 10 minutes</b>; results cached 30 minutes.",
         "about.li5": "Results are published on the <a href=\"/leaderboard\">leaderboard</a>.",
-        "about.h_exception": "One exception, explained",
+        "about.h_exception": "Two exceptions, explained",
         "about.p_exception": "One step, the multi-UA probe, requests your site with several real "
                         "AI agent identifiers (GPTBot, ClaudeBot, …) and <b>one real browser "
                         "identifier</b>, then compares the responses — to answer \"do you treat "
                         "agents differently from normal visitors\". <b>This only measures "
                         "anything if the identifiers are real</b>, so it is a measurement, not "
-                        "anonymous crawling. Every other fetch uses the honest agent above.",
+                        "anonymous crawling. Second: in the daily census, a site that returns "
+                        "non-200 to our scanner gets <b>one</b> extra request with a real browser "
+                        "identifier — to tell \"this site blocks non-browser clients\" apart from "
+                        "\"our network is blocked\". Every other fetch uses the honest agent above.",
         "about.h_optout": "Don't want to be scanned",
         "about.p_optout": "robots.txt is not honoured automatically yet — known TODO. Two ways out:",
         "about.li_issue": "<b>(preferred) Open an issue</b> with the "
@@ -727,13 +730,15 @@ STR = {
         "about.li3": "单次检测对同一站点发起约 10 个请求，耗时 15–20 秒。",
         "about.li4": "<b>同一域名 10 分钟内只真扫一次</b>，结果缓存 30 分钟。",
         "about.li5": "结果公开在<a href=\"/leaderboard\">榜单</a>里。",
-        "about.h_exception": "有一处例外，说明一下",
+        "about.h_exception": "有两处例外，说明一下",
         "about.p_exception": "检测里有一步是「多 UA 探测」：用几个真实 AI agent 的标识"
                         "（GPTBot、ClaudeBot 等）和<b>一个真实浏览器的标识</b>各请求一次你的站点，"
                         "对比返回是否不同——这是为了回答「你的站有没有把 AI agent 和正常访客"
                         "区别对待」。<b>这一步必须是真实标识才测得出来</b>，"
-                        "所以这里是测量工具，不是匿名抓取。除这一步外，"
-                        "所有内容抓取都用上面那个诚实的用户代理。",
+                        "所以这里是测量工具，不是匿名抓取。第二处：每日普查里，凡是"
+                        "对本扫描器返回非 200 的站，会额外用<b>一个真实浏览器标识</b>请求一次——"
+                        "为了把「这个站挡非浏览器客户端」和「我们的网络被挡」分开。"
+                        "除这两处外，所有内容抓取都用上面那个诚实的用户代理。",
         "about.h_optout": "不想被扫",
         "about.p_optout": "目前尚未实现 robots.txt 自动遵从——这是已知的待办。可用的退出通道有两个：",
         "about.li_issue": "<b>（推荐）开一个 issue</b>："
