@@ -1,0 +1,35 @@
+# agentbi.tech — we measure whether sites let AI agents in, so ours states it explicitly.
+# Everything except the live-scan API is open to every crawler; /api/check runs a real
+# scan per request (and pulls several MB from the target site), so it is closed.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Named explicitly so the intent is unambiguous — same answer as * above, repeated per
+# agent because some crawlers only look at their own group.
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /api/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+
+User-agent: Bytespider
+Allow: /
+Disallow: /api/
+
+Sitemap: https://agentbi.tech/sitemap.xml

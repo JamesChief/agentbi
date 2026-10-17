@@ -277,6 +277,80 @@ def render_page(name, lang):
     return S.render_template(raw, lang)
 
 
+# sitemap 里只列服务端渲染的页面；/batch.json 是数据不是页面，不进 sitemap
+SITEMAP_PATHS = ["/", "/leaderboard", "/trend", "/protocols", "/crawlers",
+                 "/categories", "/about"]
+
+
+def _batch():
+    try:
+        with open(BATCH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"rows": []}
+
+
+def llms_txt():
+    """给 agent 看的纯文本站点地图（llms-txt 草案格式）。
+
+    我们每天都测别人有没有这个文件，自己没有说不过去。数字直接取当天 batch.json，
+    所以它跟榜单上的数是同一份、且每天自动更新——手写的 llms.txt 会过期。
+    """
+    d = _batch()
+    rows = d.get("rows") or []
+    reach = sum(1 for r in rows if r.get("home_status") == 200)
+    ucp = sum(1 for r in rows if r.get("ucp_parsed"))
+    day = time.strftime("%Y-%m-%d", time.gmtime(d.get("generated_at") or time.time()))
+    v = d.get("vantage") or {}
+    where = v.get("country") or "unknown"
+    head = (f"{len(rows)} storefronts scanned once a day from {where}; every measurement "
+            f"is published as raw JSON so anyone can recompute a row.")
+    if rows:
+        head += (f" Today ({day}): {reach}/{len(rows)} reachable, "
+                 f"{ucp} serving a UCP profile.")
+    return "\n".join([
+        "# AgentBI",
+        "",
+        "> " + head,
+        "",
+        "## Start here",
+        "",
+        "- [Home](https://agentbi.tech/): paste a URL, get an agent-readiness report (10 checks, ~15s)",
+        "- [Leaderboard](https://agentbi.tech/leaderboard): today's scores for the whole pool, filterable by platform and score band",
+        "- [Raw daily batch](https://agentbi.tech/batch.json): every field we measured today, no key required",
+        "",
+        "## Data",
+        "",
+        "- [Protocols](https://agentbi.tech/protocols): UCP / ACP / AP2 deployment counts",
+        "- [Crawlers](https://agentbi.tech/crawlers): which AI agents each site blocks in robots.txt",
+        "- [Trend](https://agentbi.tech/trend): day-over-day movement of the same sites",
+        "- [Categories](https://agentbi.tech/categories): the same data grouped by industry",
+        "",
+        "## About",
+        "",
+        "- [About, crawling behaviour, opt-out](https://agentbi.tech/about): honest user agent, rate limits, how to be removed",
+        "- [CLI on PyPI](https://pypi.org/project/agentbi/): uvx agentbi <url> — same checks from your terminal",
+        "",
+        "## For agents",
+        "",
+        "- /batch.json is the machine-readable source behind every number on this site (JSON, Cache-Control: max-age=1800).",
+        "- /api/check runs a live scan and is rate-limited; /robots.txt disallows it. Use /batch.json instead.",
+        "- Scores are heuristic, not an audit. See /about.",
+        "",
+    ])
+
+
+def sitemap_xml():
+    d = _batch()
+    lm = time.strftime("%Y-%m-%d", time.gmtime(d.get("generated_at") or time.time()))
+    urls = "".join(
+        f"<url><loc>https://agentbi.tech{p}</loc><lastmod>{lm}</lastmod>"
+        f"<changefreq>daily</changefreq></url>" for p in SITEMAP_PATHS)
+    return ("<?xml version='1.0' encoding='UTF-8'?>"
+            "<urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"
+            + urls + "</urlset>")
+
+
 def _cache_peek(url, lang):
     """缓存里的新鲜结果，没有就 None。只用来在限流之前放行重复查询。"""
     with _lock:
@@ -1186,6 +1260,18 @@ class H(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
 
+    def _send_plain(self, body, ctype="text/plain; charset=utf-8",
+                     cache="public, max-age=3600"):
+        """HEAD 也要带 Content-Length 但不带正文，否则部分爬虫会当成 404。"""
+        b = body.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        if self.command != "HEAD":
+            return self.wfile.write(b)
+
     def _send_page(self, name, lang):
         body = render_page(name, lang).encode()
         self.send_response(200)
@@ -1201,6 +1287,10 @@ class H(SimpleHTTPRequestHandler):
         # 不覆盖 do_HEAD 的话，HEAD /leaderboard 会走静态文件逻辑返回 404，
         # 社交卡片校验器和部分爬虫会被误导
         u = urlparse(self.path)
+        if u.path == "/llms.txt":
+            return self._send_plain(llms_txt())
+        if u.path == "/sitemap.xml":
+            return self._send_plain(sitemap_xml(), "application/xml; charset=utf-8")
         if u.path in ("/leaderboard", "/leaderboard.html"):
             return self._send_html(self._leaderboard_body(self.lang()))
         if u.path in ("/trend", "/trend.html"):
@@ -1238,6 +1328,16 @@ class H(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}"}, 500)
             return self._json({"cached": cached, "result": res})
+
+        if u.path == "/robots.txt":
+            return self._send_plain(
+                open(os.path.join(WEB, "robots.txt"), encoding="utf-8").read())
+
+        if u.path == "/llms.txt":
+            return self._send_plain(llms_txt())
+
+        if u.path == "/sitemap.xml":
+            return self._send_plain(sitemap_xml(), "application/xml; charset=utf-8")
 
         if u.path in ("/", "/index.html"):
             return self._send_page("index.html", lang)

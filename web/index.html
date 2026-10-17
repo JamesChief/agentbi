@@ -20,6 +20,14 @@
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+{"@type":"Organization","@id":"https://agentbi.tech/#org","name":"AgentBI","url":"https://agentbi.tech/","description":"AgentBI measures whether an AI agent can reach, read and buy from a website, and publishes a daily census of 225 storefronts."},
+{"@type":"WebSite","@id":"https://agentbi.tech/#site","url":"https://agentbi.tech/","name":"AgentBI","publisher":{"@id":"https://agentbi.tech/#org"},"inLanguage":["en","zh"]},
+{"@type":"SoftwareApplication","name":"agentbi","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","url":"https://pypi.org/project/agentbi/","isAccessibleForFree":true,"publisher":{"@id":"https://agentbi.tech/#org"}},
+{"@type":"Dataset","name":"AgentBI daily agent-readiness census","description":"One scan per day of every site in the pool: HTTP reachability, structured product data, llms.txt, robots.txt rules for AI agents, and UCP / ACP / AP2 deployment. Every measured field is published as raw JSON.","url":"https://agentbi.tech/batch.json","creator":{"@id":"https://agentbi.tech/#org"},"isAccessibleForFree":true,"license":"https://agentbi.tech/about"}
+]}
+</script>
 </head>
 <body>
 <h1>AgentBI</h1>
