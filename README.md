@@ -76,9 +76,16 @@ outcome). Rendered at <https://agentbi.tech/leaderboard>.
 That file is **today's run only**. `batch.json` in this repo is a dated snapshot,
 not the live one — check `generated_at` before quoting anything from it.
 
-Headline as of the 2026-10-13 run: 225 stores scanned, 130 evaluable (homepage
-returned 200), avg score 51. Of those, Shopify 68 → 57 with UCP (84%),
-WooCommerce 10 → 0, SalesforceCC 7 → 0, unclassified 45 → 1.
+Headline as of the 2026-10-17 run: 225 stores scanned, 129 evaluable (homepage
+returned 200), avg score 50. Of those, Shopify 68 → 56 with UCP (82%),
+WooCommerce 10 → 0, SalesforceCC 7 → 0, unclassified 44 → 2.
+
+Stores that answer non-200 get **one extra request with a real browser UA** (same
+headers, UA is the only difference), recorded as `home_ctrl_status`: if that one
+gets through, the site lets humans in and turns non-browser clients away; if it
+does not, the block is against this scanner's network, and that store's
+agent-readiness is simply unknown. Old snapshots lack the field — unmeasured,
+not zero.
 
 If you are reporting UCP numbers against a shared frame, note that our positive
 is `/.well-known/ucp` answering 200, **parsing as JSON** and **declaring
