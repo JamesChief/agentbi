@@ -363,6 +363,13 @@ STR = {
                         "raw result — every field, one row per store — is public at "
                         "<a href=\"/batch.json\">agentbi.tech/batch.json</a>, so any number "
                         "here can be recomputed.",
+        "about.h_self": "Our own score",
+        "about.p_self": "We point this at ourselves: <b>55/100</b> (2026-10-18), and that is our "
+                        "ceiling. We ship <a href=\"/llms.txt\">/llms.txt</a>, a robots.txt that "
+                        "names and allows AI agents, a sitemap and JSON-LD — but we sell "
+                        "nothing, so Product structured data and UCP (45 of the 100 points) "
+                        "are unreachable for us. The report's top suggestions are written for "
+                        "storefronts; on a site like ours they do not apply.",
         "about.back": "← Back to scanning",
 
         "og.site_name": "AgentBI",
@@ -752,6 +759,12 @@ STR = {
                         "agent 友好度低」。每天重扫一次，原始结果（每个站一行、全字段）公开在 "
                         "<a href=\"/batch.json\">agentbi.tech/batch.json</a>，"
                         "这里的任何数字都可以自己重算。",
+        "about.h_self": "我们自己的分数",
+        "about.p_self": "这个工具也扫我们自己：<b>55/100</b>（2026-10-18），而这就是我们的上限。"
+                        "我们有 <a href=\"/llms.txt\">/llms.txt</a>、点名并放行 AI agent 的 "
+                        "robots.txt、sitemap 与 JSON-LD；但我们不卖东西，所以 Product 结构化数据 "
+                        "与 UCP（100 分里的 45 分）我们拿不到。报告里排在前面的建议是写给商店站点的，"
+                        "对我们这种站不适用。",
         "about.back": "← 返回检测",
 
         "og.site_name": "AgentBI",
