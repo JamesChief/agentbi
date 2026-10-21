@@ -96,16 +96,22 @@ function render(r){
           `<table><tr><th>${esc(T('rep.service'))}</th><th>${esc(T('rep.version'))}</th>`+
           `<th>${esc(T('rep.transport'))}</th></tr>${svc}</table>`;
   }
-
-  const fixes = (r.fixes||[]).map(f =>
+  const fixHtml = fs => fs.map(f =>
     `<li><span class="pri pri-${esc(f[1])}">${esc(T('pri.'+f[1]))}</span> <b>${esc(f[0])}</b><br>${esc(f[2])}</li>`).join('');
+  const grp = f => (f[3] || 'commerce');
+  const coreFx = (r.fixes||[]).filter(f => grp(f) === 'core');
+  const comFx  = (r.fixes||[]).filter(f => grp(f) === 'commerce');
+  const coreLine = (r.core_score === undefined || r.core_score === null) ? ''
+    : `<p class="sub">${esc(fill(T('rep.core'), {score:r.core_score}))}</p>`;
 
   return `
     <div class="score ${scoreClass(r.score)}">${r.score}<span>/100</span></div>
+    ${coreLine}
     <p class="sub">${esc(T('rep.checked'))} <code>${esc(r.checked_url)}</code>（${esc(r.checked_kind)}）</p>
     <table class="dim">${rows}</table>
     ${ucp}${probe}
-    ${fixes?`<h3>${esc(T('rep.fixes'))}</h3><ul class="fix">${fixes}</ul>`:''}`;
+    ${coreFx.length?`<h3>${esc(T('rep.fixes'))}</h3><ul class="fix">${fixHtml(coreFx)}</ul>`:''}
+    ${comFx.length?`<h3>${esc(T('rep.fixes_commerce'))}</h3><ul class="fix">${fixHtml(comFx)}</ul>`:''}`;
 }
 
 async function scan(url){

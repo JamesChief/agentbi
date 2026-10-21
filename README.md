@@ -23,6 +23,12 @@ what does a single site need to fix.
 
 Output is a 0–100 score plus a prioritized fix list.
 
+45 of those 100 points (Product JSON-LD + UCP) only exist for sites that sell something,
+so a SaaS or docs site tops out at 55 — that is a ceiling of the rubric, not a result.
+Every report therefore also carries a **readability sub-score out of 55** (fetchability +
+`llms.txt` + robots), which is on the same scale for shops and non-shops alike. Fix-list
+items are grouped the same way: core items apply to every site, commerce items do not.
+
 Scoring is **heuristic**. It is for seeing the gap, not for auditing a site.
 
 ---

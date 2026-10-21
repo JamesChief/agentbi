@@ -528,21 +528,23 @@ def probe_unverified(origin, text, ua, timeout=8):
 
 # -------------------------------------------------------------- 平台识别
 
+# 匹配必须锚在"资产 / 路径 / 主机"上下文里，不能只匹配平台名本身：正文里提到别家
+# 平台（我们的首页就写着 Shopify / WooCommerce / WordPress）会让纯名字匹配自指误报，
+# 把 agentbi.tech 自己判成 WooCommerce。
 PLATFORM_SIGNALS = [
     ("Shopify", (r"cdn\.shopify\.com", r"myshopify\.com", r"Shopify\.theme",
-                 r"x-shopify", r"/collections/"),),
-    ("WooCommerce", (r"wp-content/plugins/woocommerce", r"woocommerce",
-                     r"/wp-json/", r"wc-ajax")),
+                 r"x-shopify", r"/collections/")),
+    ("WooCommerce", (r"wp-content/plugins/woocommerce", r"woocommerce[-._]",
+                     r"/wp-json/wc/", r"wc-ajax", r"wc-blocks")),
     ("Magento", (r"Mage\.Cookies", r"/static/version\d+", r"x-magento",
                  r"mage/cookies")),
-    ("BigCommerce", (r"bigcommerce\.com", r"cdn\d+\.bigcommerce")),
+    ("BigCommerce", (r"[\w-]+\.bigcommerce\.com", r"cdn\d+\.bigcommerce")),
     ("SalesforceCC", (r"demandware", r"/on/demandware", r"dwac_")),
-    ("Shopware", (r"shopware",)),
-    ("PrestaShop", (r"prestashop",)),
-    ("Squarespace", (r"squarespace\.com",)),
-    ("Wix", (r"wixstatic\.com", r"wix\.com")),
+    ("Shopware", (r"shopware[-._]", r"/shopware")),
+    ("PrestaShop", (r"prestashop[-._]", r"/prestashop")),
+    ("Squarespace", (r"[\w-]+\.squarespace\.com",)),
+    ("Wix", (r"wixstatic\.com", r"[\w-]+\.wix\.com")),
 ]
-
 
 def detect_platform(headers, text):
     """按 HTTP 头 + HTML 特征识别电商平台。识别不出返回 Unknown。"""
@@ -565,7 +567,7 @@ def detect_platform(headers, text):
 # ---------------------------------------------------------------------- 评分
 
 def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
-    s, detail, skipped = 0, {}, []
+    s, detail, skipped, pts = 0, {}, [], {}
 
     # 可抓取性 35
     if probe.get("skipped"):
@@ -585,6 +587,7 @@ def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
             grab += 8 if len(readable) == len(ok) else 4
         detail["fetch"] = S.t("rep.fetch_detail", lang, ok=len(ok), total=len(ags),
                               readable=len(readable))
+        pts["fetch"] = grab
         s += grab
 
     # 结构化产品数据 30
@@ -603,6 +606,7 @@ def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
     sd = min(sd, 30)          # 各分项权重之和为 35，按维度上限 30 截断
     detail["structured"] = (S.t("rep.struct_full", lang) if sd >= 26 else
                             S.t("rep.struct_partial", lang) if sd else S.t("rep.struct_none", lang))
+    pts["structured"] = sd
     s += sd
 
     # UCP 15（已一手核实的站点侧标识）
@@ -620,6 +624,7 @@ def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
         detail["ucp"] = S.t("rep.ucp_html", lang, path=UCP_PATH)
     else:
         detail["ucp"] = S.t("rep.ucp_status", lang, path=UCP_PATH, status=ucp["status"])
+    pts["ucp"] = up
     s += up
 
     # llms.txt 10
@@ -628,6 +633,7 @@ def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
         lm += 3
     detail["llms"] = (S.t("rep.llms_full", lang) if lm == 10
                       else (S.t("rep.llms_yes", lang) if lm else S.t("rep.llms_no", lang)))
+    pts["llms"] = lm
     s += lm
 
     # robots 10
@@ -643,48 +649,75 @@ def score(probe, struct, llms, robots, ucp, lang=S.DEFAULT):
         rb = 6  # 没有 robots.txt 等价于默认放行
     detail["robots"] = (S.t("rep.robots_blocking", lang, n=len(blocked_any)) if robots["present"]
                         else S.t("rep.robots_none", lang))
+    pts["robots"] = rb
     s += rb
 
     # 未测的维度不计入分母，按已测维度折算回百分制
     max_got = 100 - sum(w for _, w in skipped)
     total = min(100, round(s / max_got * 100) if max_got and skipped else s)
     detail["_skipped"] = [k for k, _ in skipped]
+    detail["_points"] = pts
+    # 通用可抓取分：可抓取性 35 + llms.txt 10 + robots 10，满分 55。
+    # 非商店站（SaaS / 文档站）拿不到 product 30 与 UCP 15，总分天然封顶 55，
+    # 这个子分是不做交易的站唯一能跟商店站横向比的数字。
+    # 可抓取性没测出来时（探测器 vantage 不可达）就不给这个数——
+    # 按 20 分折算出来的"通用分"跟 55 分制不可比。
+    detail["_core"] = (pts["fetch"] + pts["llms"] + pts["robots"]
+                       if "fetch" in pts else None)
     return total, detail
 
 
 # ------------------------------------------------------------------ 修复建议
 
 def fixes(struct, llms, robots, probe, ucp, protos, lang=S.DEFAULT):
+    """修复建议。每条的第四项是分组：
+
+    core     = 所有站点都适用（可抓取性 / llms.txt / robots）
+    commerce = 只有做交易的站才适用（UCP / Product JSON-LD）
+
+    分组不是装饰：非商店站（SaaS / 文档站）拿不到那 45 分，把"部署 UCP"挂在
+    high 上会让第一个非商店用户（就是我们自己）看到一整屏不适用的建议。
+    而我们没有可靠办法自动判断"这不是商店"——今天 210 个可评站里有 119 个
+    零商业信号却全是商店（walmart / ikea / lego），所以只能标分组，不能按
+    信号缺失改判优先级。
+    """
     out = []
     if not ucp["present"]:
         out.append((S.t("fix.ucp_missing.title", lang), "high",
-                    S.t("fix.ucp_missing.desc", lang, path=UCP_PATH, status=ucp["status"])))
+                    S.t("fix.ucp_missing.desc", lang, path=UCP_PATH, status=ucp["status"]),
+                    "commerce"))
     elif len(ucp["supported_versions"]) <= 1:
         out.append((S.t("fix.ucp_single.title", lang), "medium",
-                    S.t("fix.ucp_single.desc", lang, v=ucp["version"])))
+                    S.t("fix.ucp_single.desc", lang, v=ucp["version"]), "commerce"))
     if not llms["present"]:
-        out.append((S.t("fix.llms.title", lang), "high", S.t("fix.llms.desc", lang)))
+        out.append((S.t("fix.llms.title", lang), "high", S.t("fix.llms.desc", lang), "core"))
     if not struct["has_product"]:
-        out.append((S.t("fix.jsonld.title", lang), "high", S.t("fix.jsonld.desc", lang)))
-    if struct["has_product"] and "price" not in struct["fields"]:
-        out.append((S.t("fix.price.title", lang), "high", S.t("fix.price.desc", lang)))
-    for f in struct["missing"]:
-        if f in ("priceCurrency", "availability", "brand", "sku"):
-            out.append((S.t("fix.field.title", lang, field=f), "medium",
-                        S.t("fix.field.desc", lang)))
+        out.append((S.t("fix.jsonld.title", lang), "high", S.t("fix.jsonld.desc", lang),
+                    "commerce"))
+    else:
+        if "price" not in struct["fields"]:
+            out.append((S.t("fix.price.title", lang), "high", S.t("fix.price.desc", lang),
+                        "commerce"))
+        # 字段级建议只在 Product 块存在时才有意义——连块都没有的时候，
+        # 列"补 sku / 补 brand"是在给一个不存在的结构挑毛病。
+        for f in struct["missing"]:
+            if f in ("priceCurrency", "availability", "brand", "sku"):
+                out.append((S.t("fix.field.title", lang, field=f), "medium",
+                            S.t("fix.field.desc", lang), "commerce"))
     if probe.get("blocked"):
         out.append((S.t("fix.blocked.title", lang, agents=", ".join(probe["blocked"])), "high",
-                    S.t("fix.blocked.desc", lang)))
+                    S.t("fix.blocked.desc", lang), "core"))
     if robots.get("wildcard_disallow"):
-        out.append((S.t("fix.wildcard.title", lang), "high", S.t("fix.wildcard.desc", lang)))
+        out.append((S.t("fix.wildcard.title", lang), "high", S.t("fix.wildcard.desc", lang),
+                    "core"))
     if protos["paths"] or protos["tokens"]:
         out.append((S.t("fix.protos.title", lang, protos=protos["paths"] or protos["tokens"]),
-                    "low", S.t("fix.protos.desc", lang)))
+                    "low", S.t("fix.protos.desc", lang), "commerce"))
     seen, uniq = set(), []
-    for t, p, d in out:
+    for t, p, d, g in out:
         if t not in seen:
             seen.add(t)
-            uniq.append((t, p, d))
+            uniq.append((t, p, d, g))
     return uniq
 
 
@@ -769,7 +802,8 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
     return {"url": url, "checked_url": target, "checked_kind": target_kind,
             "platform": platform,
             "home_status": home["status"],
-            "score": total, "detail": detail, "structured": struct, "llms": llms,
+            "score": total, "detail": detail, "core_score": detail["_core"],
+            "structured": struct, "llms": llms,
             "robots": robots, "ucp": ucp, "server_card": server_card,
             "origin": origin, "probe": probe, "protocols": protos,
             # host selection 是 #867 frame 的 run field，必须随每次运行公开：
@@ -783,12 +817,15 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
 def render(r, lang=S.DEFAULT):
     if r.get("error"):
         return f"✗ {r['url']}: {r['error']}"
+    core = r.get("core_score")
     L = ["\n" + S.t("rep.header", lang, url=r["url"]), "=" * 64,
          S.t("rep.checked_url", lang, url=r["checked_url"], kind=r["checked_kind"]),
          S.t("rep.score", lang, score=r["score"])
          + (S.t("rep.untested", lang, items=", ".join(r["detail"]["_skipped"]))
             if r["detail"]["_skipped"] else "")
-         + "\n"]
+         + "\n",
+         S.t("rep.core", lang, score=core) if core is not None
+         else S.t("rep.core_na", lang)]
     for k in ("fetch", "structured", "ucp", "llms", "robots"):
         L.append(f"  {k:12} {r['detail'][k]}")
     p = r["probe"]
@@ -816,10 +853,20 @@ def render(r, lang=S.DEFAULT):
     if r["protocols"]["paths"] or r["protocols"]["tokens"]:
         L.append(S.t("rep.protocols", lang, protos=r["protocols"]))
     if r["fixes"]:
-        L.append("\n" + S.t("rep.fixes_head", lang))
-        for title, pri, d in r["fixes"]:
-            L.append(S.t("rep.fix_line", lang, pri=S.t(f"pri.{pri}", lang),
-                         title=title, desc=d))
+        # 老快照（缓存里 3 元组）没有分组字段，一律按商业类处理——
+        # 改动前它们就是跟 UCP/Product 混在一起的。
+        core_f = [f for f in r["fixes"] if (f[3] if len(f) > 3 else "commerce") == "core"]
+        com_f = [f for f in r["fixes"] if (f[3] if len(f) > 3 else "commerce") == "commerce"]
+        if core_f:
+            L.append("\n" + S.t("rep.fixes_core", lang))
+            for title, pri, d, *_ in core_f:
+                L.append(S.t("rep.fix_line", lang, pri=S.t(f"pri.{pri}", lang),
+                             title=title, desc=d))
+        if com_f:
+            L.append("\n" + S.t("rep.fixes_commerce", lang))
+            for title, pri, d, *_ in com_f:
+                L.append(S.t("rep.fix_line", lang, pri=S.t(f"pri.{pri}", lang),
+                             title=title, desc=d))
     return "\n".join(L)
 
 

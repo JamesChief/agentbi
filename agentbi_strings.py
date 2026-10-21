@@ -368,8 +368,11 @@ STR = {
                         "ceiling. We ship <a href=\"/llms.txt\">/llms.txt</a>, a robots.txt that "
                         "names and allows AI agents, a sitemap and JSON-LD — but we sell "
                         "nothing, so Product structured data and UCP (45 of the 100 points) "
-                        "are unreachable for us. The report's top suggestions are written for "
-                        "storefronts; on a site like ours they do not apply.",
+                        "are unreachable for us. So every report also carries a <b>readability "
+                        "sub-score</b>: fetchability + llms.txt + robots, out of 55 — the same "
+                        "scale for a shop and for a site like ours. Ours is 55/55. The commerce "
+                        "suggestions (UCP, Product JSON-LD) are grouped on their own and do not "
+                        "apply to sites that sell nothing.",
         "about.back": "← Back to scanning",
 
         "og.site_name": "AgentBI",
@@ -402,6 +405,9 @@ STR = {
         "rep.header": "Checked {url}",
         "rep.checked_url": "Target  {url}  ({kind})",
         "rep.score": "Score  {score}/100",
+        "rep.core": "Readability  {score}/55   (fetch + llms.txt + robots — "
+                   "applies to every site, store or not)",
+        "rep.core_na": "Readability  not measured (multi-UA probe inconclusive)",
         "rep.untested": "   [not tested: {items}]",
         "rep.probe_head": "  multi-UA probe:",
         "rep.readable_short": "readable",
@@ -412,6 +418,8 @@ STR = {
         "rep.entry_line": "      {v}  {transport}  {endpoint}",
         "rep.protocols": "  ACP/AP2 probe (unverified): {protos}",
         "rep.fixes_head": "  what to fix:",
+        "rep.fixes_core": "  what to fix (applies to every site):",
+        "rep.fixes_commerce": "  commerce readiness — skip these if the site sells nothing:",
         "rep.fix_line": "    [{pri}] {title}\n         {desc}",
 
         # ---------------------------------------------------------- 修复清单
@@ -763,8 +771,10 @@ STR = {
         "about.p_self": "这个工具也扫我们自己：<b>55/100</b>（2026-10-18），而这就是我们的上限。"
                         "我们有 <a href=\"/llms.txt\">/llms.txt</a>、点名并放行 AI agent 的 "
                         "robots.txt、sitemap 与 JSON-LD；但我们不卖东西，所以 Product 结构化数据 "
-                        "与 UCP（100 分里的 45 分）我们拿不到。报告里排在前面的建议是写给商店站点的，"
-                        "对我们这种站不适用。",
+                        "与 UCP（100 分里的 45 分）我们拿不到。所以每份报告都另给一个<b>通用可抓取分</b>"
+                        "：可抓取性 + llms.txt + robots，满分 55 —— 商店站和我们这种站用同一把尺子，"
+                        "我们自己是 55/55。商业类建议（UCP、Product JSON-LD）单独分组，"
+                        "不做交易的站不用看。",
         "about.back": "← 返回检测",
 
         "og.site_name": "AgentBI",
@@ -794,6 +804,9 @@ STR = {
         "rep.header": "检测 {url}",
         "rep.checked_url": "检测对象  {url}  ({kind})",
         "rep.score": "得分  {score}/100",
+        "rep.core": "通用可抓取分  {score}/55   （可抓取性 + llms.txt + robots，"
+                   "卖不卖东西都适用）",
+        "rep.core_na": "通用可抓取分  未测（多 UA 探测 inconclusive）",
         "rep.untested": "   [未测: {items}]",
         "rep.probe_head": "  多 UA 探测:",
         "rep.readable_short": "可读",
@@ -804,6 +817,8 @@ STR = {
         "rep.entry_line": "      {v}  {transport}  {endpoint}",
         "rep.protocols": "  ACP/AP2 探针（未核实）: {protos}",
         "rep.fixes_head": "  修复清单:",
+        "rep.fixes_core": "  修复清单（所有站点都适用）:",
+        "rep.fixes_commerce": "  商业就绪（不做交易的站不适用这几条）:",
         "rep.fix_line": "    [{pri}] {title}\n         {desc}",
 
         "fix.ucp_missing.title": "部署 UCP manifest",

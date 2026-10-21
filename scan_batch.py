@@ -128,6 +128,9 @@ def one(url, do_probe):
             "host_unsettled": bool(r.get("host_unsettled")),
             "checked": r["checked_url"],
             "score": r["score"],
+            # 通用可抓取分（可抓取性 + llms.txt + robots = 55）：不卖东西的站
+            # 总分封顶 55，这个子分是它们唯一能跟商店站横向比的数字。
+            "core_score": r.get("core_score"),
             **ucp_fields(r["ucp"]),
             **server_card_fields(origin_of(url), r["server_card"]),
             "product_jsonld": r["structured"]["has_product"],
