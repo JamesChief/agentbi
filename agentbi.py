@@ -544,6 +544,14 @@ PLATFORM_SIGNALS = [
     ("PrestaShop", (r"prestashop[-._]", r"/prestashop")),
     ("Squarespace", (r"[\w-]+\.squarespace\.com",)),
     ("Wix", (r"wixstatic\.com", r"[\w-]+\.wix\.com")),
+    # 中国出海建站 SaaS：指纹来自 brainstorming/fingerprint_cn.py（那一版在 15 个欧美
+    # DTC 负样本上误报 0）。这里同样锚到主机/资产上下文——正文里讨论这些平台不算数。
+    ("SHOPLINE", (r"[\w-]+\.shopline\.(com|io)", r"shoplineimg", r"myshopline", r"shopline[-._]")),
+    ("SHOPLAZZA", (r"[\w-]+\.shoplazza\.com", r"myshoplazza", r"shoplazza[-._]")),
+    ("Shopyy", (r"[\w-]+\.shopyy\.com", r"shopyy[-._]")),
+    ("XShoppy", (r"[\w-]*xshoppy\.com", r"xshoppy[-._]")),
+    ("UeeShop", (r"[\w-]+\.ueeshop\.com", r"ueeshop[-._]")),
+    ("FunPinPin", (r"funpinpin\.com", r"funpinpin[-._]")),
 ]
 
 def detect_platform(headers, text):
@@ -556,8 +564,10 @@ def detect_platform(headers, text):
                 hit.append(name)
                 break
     # Shopify 特征最独特，优先；多个命中时取第一个
+    # 新平台必须同时加进 PLATFORM_SIGNALS 和这个 order——只加前者永远返回 Unknown。
     order = ["Shopify", "WooCommerce", "Magento", "BigCommerce", "SalesforceCC",
-             "Shopware", "PrestaShop", "Squarespace", "Wix"]
+             "Shopware", "PrestaShop", "Squarespace", "Wix",
+             "SHOPLINE", "SHOPLAZZA", "Shopyy", "XShoppy", "UeeShop", "FunPinPin"]
     for n in order:
         if n in hit:
             return n
