@@ -604,16 +604,22 @@ def render_leaderboard(lang=S.DEFAULT):
     L.append(f"<input type='search' id='lb-q' class='lb-search' placeholder=\"{ph}\" "
              f"aria-label=\"{ph}\" autocomplete='off'>")
     L.append("<p class='note' id='lb-count' role='status'></p>")
+    # 55 分制不解释就会被当成"满分只有 55 的差生列"，所以列头下面必须写清楚它是什么。
+    L.append(f"<p class='note'>{html.escape(S.t('lb.core_note', lang))}</p>")
     L.append("<table id='lb-detail'><thead><tr>"
              f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_site', lang))}</th>"
              f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_platform', lang))}</th>"
              f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_avg', lang))}</th>"
+             f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_core', lang))}</th>"
              f"<th scope='col' class='sortable'>{html.escape(S.t('lb.th_ucp', lang))}</th>"
              "</tr></thead><tbody>")
     dash = S.t("lb.dash", lang)
     for r in sorted(reach, key=lambda r: -r["score"]):
+        # core_score 自 2026-10-22 那批才有；老快照缺字段一律显示"—"（未测量，不是 0）。
+        core = r.get("core_score")
         L.append(f"<tr><td>{html.escape(r['site'].replace('https://',''))}</td>"
                  f"<td>{html.escape(r['platform'])}</td><td>{r['score']}</td>"
+                 f"<td>{core if isinstance(core, int) else dash}</td>"
                  f"<td>{html.escape(r['ucp'] or dash)}</td></tr>")
     L.append("</tbody></table>")
     # 脚本内联而不是另开 lb.js：部署清单漏掉一个文件会静默出错（S.t 拿不到 key
@@ -622,6 +628,7 @@ def render_leaderboard(lang=S.DEFAULT):
         "all": S.t("lb.search_all", lang),
         "hit": S.t("lb.search_hit", lang),
         "none": S.t("lb.search_none", lang),
+        "dash": dash,          # 排序时要把"—"排除在数字判断之外，否则整列退化成文本排序
     }, ensure_ascii=False) + ";</script>")
     L.append("<script>" + _LB_SCRIPT + "</script>")
     if un:
@@ -658,19 +665,27 @@ _LB_SCRIPT = """
   }
 
   var dir = {};
+  // “—”（未测量）不算文本：否则这一列会从数字排序退化成字典序，9 会排在 55 前面。
+  function numOrBlank(v) { return v === L.dash ? null : (parseFloat(v) || 0); }
+
   function sort(col) {
     var i, num = true;
     for (i = 0; i < rows.length; i++) {
       var v = cell(rows[i], col);
-      if (v !== '' && !/^-?\\d+$/.test(v)) { num = false; break; }
+      if (v !== '' && v !== L.dash && !/^-?\\d+$/.test(v)) { num = false; break; }
     }
     // 数字列先降序（榜单是"高分在前"），文本列先 A→Z
     dir[col] = dir[col] === undefined ? !num : !dir[col];
     var asc = dir[col];
     rows.sort(function (a, b) {
       var x = cell(a, col), y = cell(b, col);
-      var c = num ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : x.localeCompare(y);
-      return asc ? c : -c;
+      if (!num) return asc ? x.localeCompare(y) : -x.localeCompare(y);
+      var nx = numOrBlank(x), ny = numOrBlank(y);
+      // 未测量的排在最末：降序时它应该沉底，升序时它也应该在最后。
+      if (nx === null && ny === null) return 0;
+      if (nx === null) return 1;
+      if (ny === null) return -1;
+      return asc ? nx - ny : ny - nx;
     });
     for (i = 0; i < rows.length; i++) body.appendChild(rows[i]);
     var hs = t.tHead.rows[0].cells;

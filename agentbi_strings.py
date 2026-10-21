@@ -130,6 +130,12 @@ STR = {
                  "egress reputation, so quote these numbers with their snapshot date.",
         "lb.detail": "Detail (evaluable {reach} / scanned {scanned})",
         "lb.th_site": "Site",
+        "lb.th_core": "Readability /55",
+        "lb.core_note": "Readability is fetchability + llms.txt + robots, out of 55 — the part "
+                       "every site can earn whether it sells anything or not. The other 45 "
+                       "points (Product JSON-LD + UCP) exist only for stores, so a site that "
+                       "sells nothing tops out at 55/100. “—” means the snapshot did not "
+                       "measure it.",
         # 分数段分布：分母必须写在标题旁边，否则"中位数 9 分"那类误读会再来一次
         "lb.h_dist": "Score distribution",
         "lb.th_score": "Score",
@@ -568,6 +574,10 @@ STR = {
                  "（对方 WAF 策略与我们的出口 IP 信誉都在变），所以引用本站数字时请带上快照日期。",
         "lb.detail": "明细（可评估 {reach} / 扫描 {scanned}）",
         "lb.th_site": "站点",
+        "lb.th_core": "通用分 /55",
+        "lb.core_note": "通用分 = 可抓取性 + llms.txt + robots，满分 55 —— 卖不卖东西都拿得到。"
+                       "另外 45 分（商品结构化数据 + UCP）只有商店站才有，所以不做交易的站总分"
+                       "封顶 55/100。显示「—」表示该快照未测此项。",
         "lb.h_dist": "分数段分布",
         "lb.th_score": "分数",
         "lb.th_share": "占比",
