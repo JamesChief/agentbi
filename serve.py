@@ -1301,6 +1301,15 @@ class H(SimpleHTTPRequestHandler):
     def _alt_label(self, lang):
         return "中文" if lang == S.DEFAULT else "English"
 
+    def _redirect(self, target):
+        """301。首页导航写的是 Signals，但这一页的 URL 是 /protocols ——
+        按标题记的人会直接打 /signals，给它一个跳转而不是 404。"""
+        self.send_response(301)
+        self.send_header("Location", target)
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def _send_html(self, body, cache="public, max-age=300"):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1335,6 +1344,8 @@ class H(SimpleHTTPRequestHandler):
         # 不覆盖 do_HEAD 的话，HEAD /leaderboard 会走静态文件逻辑返回 404，
         # 社交卡片校验器和部分爬虫会被误导
         u = urlparse(self.path)
+        if u.path in ("/signals", "/signals.html"):
+            return self._redirect("/protocols" + self._qs(self.lang()))
         if u.path == "/llms.txt":
             return self._send_plain(llms_txt())
         if u.path == "/sitemap.xml":
@@ -1356,6 +1367,9 @@ class H(SimpleHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         lang = self.lang()
+
+        if u.path in ("/signals", "/signals.html"):
+            return self._redirect("/protocols" + self._qs(lang))
 
         if u.path == "/api/check":
             q = parse_qs(u.query)
