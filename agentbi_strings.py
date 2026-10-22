@@ -134,8 +134,8 @@ STR = {
         "lb.core_note": "Readability is fetchability + llms.txt + robots, out of 55 — the part "
                        "every site can earn whether it sells anything or not. The other 45 "
                        "points (Product JSON-LD + UCP) exist only for stores, so a site that "
-                       "sells nothing tops out at 55/100. “—” means the snapshot did not "
-                       "measure it.",
+                       "sells nothing tops out at 55/100. The daily batch started running the "
+                       "multi-UA probe on 2026-10-23, so earlier snapshots show “—”.",
         # 分数段分布：分母必须写在标题旁边，否则"中位数 9 分"那类误读会再来一次
         "lb.h_dist": "Score distribution",
         "lb.th_score": "Score",
@@ -187,6 +187,10 @@ STR = {
                  "not a verdict on any single store.",
         "tr.m4": "Scoring is <b>heuristic</b>: it checks that a UCP manifest exists and its "
                  "version, it does not place a real order.",
+        "tr.m5": "From <b>2026-10-23</b> the daily batch runs the multi-UA probe on every site, "
+                 "so fetchability (35 of the 100 points) is scored from that date on. Scores "
+                 "before it were rescaled without that dimension and are <b>not comparable "
+                 "across 2026-10-23</b>.",
         "tr.api_note": "Per-store history is available as JSON: "
                        "<code>/api/site-history?site=https://example.com</code>",
         # ---- /crawlers 爬虫准入普查（板块 4）------------------------------
@@ -577,7 +581,7 @@ STR = {
         "lb.th_core": "通用分 /55",
         "lb.core_note": "通用分 = 可抓取性 + llms.txt + robots，满分 55 —— 卖不卖东西都拿得到。"
                        "另外 45 分（商品结构化数据 + UCP）只有商店站才有，所以不做交易的站总分"
-                       "封顶 55/100。显示「—」表示该快照未测此项。",
+                       "封顶 55/100。每日批自 2026-10-23 起开启多 UA 探测，此前的快照显示「—」。",
         "lb.h_dist": "分数段分布",
         "lb.th_score": "分数",
         "lb.th_share": "占比",
@@ -619,6 +623,9 @@ STR = {
         "tr.m3": "403 是<b>我们</b>出口 IP 的信誉问题，不是站点配置有问题。今天被拦的站点明天可能又评上了"
                  "——请把这条序列当趋势读，不要当对某个单站的结论。",
         "tr.m4": "评分是<b>启发式</b>的：只检查 UCP manifest 是否存在及其版本，不会真的下单。",
+        "tr.m5": "自 <b>2026-10-23</b> 起每日批对每个站点都跑多 UA 探测，可抓取性（100 分里的 35 分）"
+                 "从这天起计入总分。此前的分数是在不含这一项的前提下折算的，跨 2026-10-23 "
+                 "<b>不可比</b>。",
         "tr.api_note": "单站历史提供 JSON 接口："
                        "<code>/api/site-history?site=https://example.com</code>",
         # ---- /crawlers 爬虫准入普查（板块 4）------------------------------

@@ -1,6 +1,8 @@
 # /etc/systemd/system/agentbi-scan.service
 # 每日重扫一遍，产出 batch.json + 每日快照 history/batch-<date>.json
-# 默认不做多 UA 探测（请求数 ×7，对 225 个站不礼貌），榜单口径与此前一致
+# 2026-10-22 起开多 UA 探测（--probe）：不开的话 core_score 恒为 None、blocked_agents 恒为空
+#   —— score() 在探测跳过时把 fetch 那 35 分记为 skipped，通用分因此永远算不出来。
+#   代价：请求数约 ×7（~1600/天）、全批约 40 分钟；且 fetch 分计入后总分与 10-22 及之前不可比
 
 [Unit]
 Description=agentbi daily batch scan
@@ -12,7 +14,7 @@ User=agentbi
 Group=agentbi
 WorkingDirectory=/opt/agentbi
 # --live 是必须的：不加就写 batch.test.json / leaderboard.test.md（防小样本试跑覆盖生产数据）
-ExecStart=/usr/bin/python3 -u scan_batch.py sites.txt --live
+ExecStart=/usr/bin/python3 -u scan_batch.py sites.txt --live --probe
 # 订阅者名单没有别的副本（要收信才会意识到它有多脆），每天跟快照一起留一份
 ExecStartPost=/bin/sh -c 'test -f /opt/agentbi/subscribers.jsonl && cp /opt/agentbi/subscribers.jsonl /opt/agentbi/history/subscribers-$(date -u +%%F).jsonl || true'
 TimeoutStartSec=3600

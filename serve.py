@@ -615,7 +615,7 @@ def render_leaderboard(lang=S.DEFAULT):
              "</tr></thead><tbody>")
     dash = S.t("lb.dash", lang)
     for r in sorted(reach, key=lambda r: -r["score"]):
-        # core_score 自 2026-10-22 那批才有；老快照缺字段一律显示"—"（未测量，不是 0）。
+        # core_score 自 2026-10-23 那批才有（每日批从这天起开多 UA 探测）；老快照缺字段一律显示"—"（未测量，不是 0）。
         core = r.get("core_score")
         L.append(f"<tr><td>{html.escape(r['site'].replace('https://',''))}</td>"
                  f"<td>{html.escape(r['platform'])}</td><td>{r['score']}</td>"
@@ -822,7 +822,7 @@ def render_trend(lang=S.DEFAULT):
 
     # ---- 3. 方法与局限（每条数据要可引用就必须带这三要素）----
     L.append(f"<h2>{e(S.t('tr.method', lang))}</h2><ul>")
-    for k in ("m1", "m2", "m3", "m4"):
+    for k in ("m1", "m2", "m3", "m4", "m5"):
         L.append("<li>" + S.t(f"tr.{k}", lang, n=n_sites) + "</li>")
     L.append("</ul>")
     L.append(f"<p class='note'>{S.t('tr.api_note', lang)}</p>")
