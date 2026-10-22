@@ -128,6 +128,12 @@ def one(url, do_probe):
             "host_unsettled": bool(r.get("host_unsettled")),
             "checked": r["checked_url"],
             "score": r["score"],
+            # 首页对我们的 UA 返回 403/429/418 时 run() 只在 status==0（连不上）才放弃，
+            # 被拦的情况下仍会拿那个错误页继续打分（warbyparker 403 也有 22 分）。
+            # 页面一律按 home_status==200 过滤、不显示这些行，但 batch.json 是公开的，
+            # 直接读它的人必须能一眼看出这个分不是从真实首页算出来的。
+            "score_from_blocked_page": (isinstance(r["score"], int)
+                                        and r["home_status"] != 200),
             # 通用可抓取分（可抓取性 + llms.txt + robots = 55）：不卖东西的站
             # 总分封顶 55，这个子分是它们唯一能跟商店站横向比的数字。
             "core_score": r.get("core_score"),
