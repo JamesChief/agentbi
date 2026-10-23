@@ -276,6 +276,52 @@ def render_leaderboard(rows):
     return "\n".join(L) + "\n"
 
 
+def _positives(rows):
+    """本站对外口径的 UCP 阳性：200 + 解析成功 + 声明了 ucp.version。
+
+    与 ucp#867 表格里我们那行（row 2 + ucp.version）是同一个判据，别换成别的。
+    """
+    out = {}
+    for r in rows:
+        if r.get("ucp_status") == 200 and r.get("ucp"):
+            out[urlparse(r["site"]).netloc or r["site"]] = r["ucp"]
+    return out
+
+
+def _prev_snapshot(today):
+    """history/ 里今天之前最近的一份快照文件名；没有（第一天）返回 None。"""
+    if not os.path.isdir("history"):
+        return None
+    cands = [f for f in os.listdir("history")
+             if f.startswith("batch-") and f.endswith(".json") and f[6:16] < today]
+    return sorted(cands)[-1] if cands else None
+
+
+def delta_block(rows, today):
+    """相对上一次 pass 的变化：进了哪些、掉了哪些、声明版本怎么分布。
+
+    ucp#867 的 frame 把这两项设为可选字段（2026-10-23 frmoretto 加的），
+    目的就是让"数量变了"不被读成采用率在动。只跟生产快照比，试跑不产 delta。
+    """
+    prev_file = _prev_snapshot(today)
+    if not prev_file:
+        return None
+    try:
+        with open(os.path.join("history", prev_file)) as f:
+            prev_rows = json.load(f)["rows"]
+    except (OSError, ValueError, KeyError):
+        return None
+    now, prev = _positives(rows), _positives(prev_rows)
+    versions = {}
+    for v in now.values():
+        versions[v] = versions.get(v, 0) + 1
+    return {"prev_date": prev_file[6:16],
+            "n_positive": len(now), "prev_n_positive": len(prev),
+            "entered": sorted(set(now) - set(prev)),
+            "left": sorted(set(prev) - set(now)),
+            "ucp_versions": dict(sorted(versions.items(), key=lambda kv: -kv[1]))}
+
+
 def write_text(path, text):
     """原子替换：网页端随时可能在读这些文件，直接 open(w) 会让它读到半个文件。"""
     tmp = path + ".tmp"
@@ -330,6 +376,13 @@ def main():
     out = {"generated_at": time.time(), "vantage": vantage,
            "ucp_route": A.UCP_PATH, "server_card_route": A.SERVER_CARD_PATH,
            "rows": rows}
+
+    if not dry:
+        # 只跟生产快照比：试跑数据不能混进对外序列
+        delta = delta_block(rows, time.strftime("%Y-%m-%d"))
+        if delta:
+            out["delta"] = delta
+            print("delta 对比 %s：进 %d / 掉 %d" % (delta["prev_date"], len(delta["entered"]), len(delta["left"])), file=sys.stderr)
 
     write_text(batch_path, json.dumps(out, ensure_ascii=False, indent=1))
     write_text(lb_path, render_leaderboard(rows))
