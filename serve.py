@@ -27,6 +27,14 @@ import agentbi_strings as S
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 BATCH = os.path.join(HERE, "batch.json")
+# 分池（2026-10-25）：主池 225 的数字已对外引用过，扩展池单独成文件、单独成序列，
+# 绝不并进 batch.json —— 并池会改掉分母。
+POOLS = ("", "cn", "kr", "jp")
+POOL_FILES = {"cn": "batch-cn.json", "kr": "batch-kr.json", "jp": "batch-jp.json"}
+
+
+def batch_path(pool):
+    return BATCH if not pool else os.path.join(HERE, POOL_FILES[pool])
 SUBSCRIBERS = os.path.join(HERE, "subscribers.jsonl")
 CORRECTIONS = os.path.join(HERE, "corrections.jsonl")
 
@@ -46,7 +54,7 @@ _lock = threading.Lock()
 _sub_lock = threading.Lock()           # 订阅文件单独一把锁，别和检测抢
 _sem = threading.Semaphore(6)          # 同时最多 6 个检测（I/O 密集，2 vCPU 够）
 _sem_wait = 2                          # 等不到位置就明确报忙，别让用户干等着转圈
-_LB = {"mtime": 0.0, "html": ""}       # 榜单渲染结果缓存：每次请求渲染 225 行没必要
+_LB = {}                                 # {(lang, pool): (mtime, html)}：每次请求重渲染一行都没必要
 
 # 图标声明。ico 是兜底（老浏览器、以及分享/抓取只看这一个），SVG 给支持的浏览器。
 # 顺序有讲究：浏览器取最后一个它支持的，所以 SVG 放后面。浏览器本来就会自动请求
@@ -435,13 +443,17 @@ def _prev_snapshot(cur_date):
     return None
 
 
-def render_leaderboard(lang=S.DEFAULT):
-    if not os.path.exists(BATCH):
-        return f"<p>{html.escape(S.t('lb.no_data', lang))}</p>"
-    mt = os.path.getmtime(BATCH)
-    if _LB.get(lang) and _LB["mtime"] == mt:
-        return _LB[lang]                         # batch.json 没变就不重渲染
-    data = json.load(open(BATCH))
+def render_leaderboard(lang=S.DEFAULT, pool=""):
+    path = batch_path(pool)
+    if not os.path.exists(path):
+        # 扩展池由每日批产出；第一次跑出来之前这里必然是空的，说清楚而不是装作没这个池
+        return f"<p class='note'>{html.escape(S.t('lb.pool_pending', lang))}</p>"
+    mt = os.path.getmtime(path)
+    key = (lang, pool)
+    hit = _LB.get(key)
+    if hit and hit[0] == mt:
+        return hit[1]                            # 文件没变就不重渲染
+    data = json.load(open(path))
     rows = data["rows"]
     ok = [r for r in rows if not r.get("error")]
     reach = [r for r in ok if r.get("home_status") == 200]
@@ -617,7 +629,11 @@ def render_leaderboard(lang=S.DEFAULT):
     for r in sorted(reach, key=lambda r: -r["score"]):
         # core_score 自 2026-10-23 那批才有（每日批从这天起开多 UA 探测）；老快照缺字段一律显示"—"（未测量，不是 0）。
         core = r.get("core_score")
-        L.append(f"<tr><td>{html.escape(r['site'].replace('https://',''))}</td>"
+        # 站点做成外链：榜单上看到结果的人下一个动作就是去看那家站
+        site_url = r.get("site") or ""
+        L.append(f"<tr><td><a class='site' href='{html.escape(site_url)}' "
+                 f"target='_blank' rel='nofollow noopener'>"
+                 f"{html.escape(site_url.replace('https://', ''))}</a></td>"
                  f"<td>{html.escape(r['platform'])}</td><td>{r['score']}</td>"
                  f"<td>{core if isinstance(core, int) else dash}</td>"
                  f"<td>{html.escape(r['ucp'] or dash)}</td></tr>")
@@ -633,8 +649,8 @@ def render_leaderboard(lang=S.DEFAULT):
     L.append("<script>" + _LB_SCRIPT + "</script>")
     if un:
         L.append(f"<p class='note'>{S.t('lb.note_unreach', lang, n=len(un))}</p>")
-    _LB["mtime"], _LB[lang] = mt, "\n".join(L)
-    return _LB[lang]
+    _LB[key] = (mt, "\n".join(L))
+    return _LB[key][1]
 
 
 # 榜单明细的筛选/排序。纯 DOM 操作，不发请求——225 行全在页面里，
@@ -1162,8 +1178,35 @@ class H(SimpleHTTPRequestHandler):
                 cookie = part.strip()[len("lang="):]
         return lang_of((q.get("lang") or [""])[0], cookie)
 
+    def pool(self):
+        """?pool=cn|kr|jp；不在白名单里就回落主池（不 404，也不暴露别的路径）。"""
+        q = parse_qs(urlparse(self.path).query)
+        v = (q.get("pool") or [""])[0].strip().lower()
+        return v if v in POOL_FILES else ""
+
+    def _lb_href(self, lang, pool):
+        parts = []
+        if lang != S.DEFAULT:
+            parts.append("lang=" + lang)
+        if pool:
+            parts.append("pool=" + pool)
+        return "/leaderboard" + ("?" + "&".join(parts) if parts else "")
+
+    def _pool_tabs(self, lang, pool):
+        e = html.escape
+        out = []
+        for p in POOLS:
+            label = S.t("lb.pool_" + (p if p else "main"), lang)
+            if p == pool:
+                out.append(f"<b class='pool-on'>{e(label)}</b>")
+            else:
+                out.append(f"<a href='{self._lb_href(lang, p)}'>{e(label)}</a>")
+        return (f"<p class='pools'>{e(S.t('lb.pool_label', lang))}: "
+                + " · ".join(out) + "</p>")
+
     def _leaderboard_body(self, lang=S.DEFAULT):
         e = html.escape
+        pool = self.pool()
         return (f"<html lang='{lang}'><head><meta charset='utf-8'>"
                 f"<title>{e(S.t('lb.title', lang))}</title>"
                 f"<meta name='description' content=\"{e(S.t('og.lb_desc', lang))}\">"
@@ -1184,7 +1227,8 @@ class H(SimpleHTTPRequestHandler):
                 # /categories 从首页挪过来了（首页只留 Leaderboard + Trend·Signals·Crawlers 两块），
                 # 分品类基准跟榜单是一路的，放这儿比放首页合适
                 f"<a href='/categories{self._qs(lang)}'>{e(S.t('site.cat_link', lang))}</a></p>"
-                f"{render_leaderboard(lang)}"
+                f"{self._pool_tabs(lang, pool)}"
+                f"{render_leaderboard(lang, pool)}"
                 f"{corr_block(lang)}"
                 f"{sub_block(lang)}"
                 f"<p class='note'><a href='{self._alt(lang)}'>{self._alt_label(lang)}</a></p>"

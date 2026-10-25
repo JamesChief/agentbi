@@ -152,6 +152,13 @@ STR = {
                           "That is not a judgement on their agent-readiness; they are not "
                           "counted here.",
         "lb.no_data": "No leaderboard data yet",
+        # 分池切换（2026-10-25）：225 主池与 CN/KR/JP 扩展池各自成表，分母不相加。
+        "lb.pool_label": "Pool",
+        "lb.pool_main": "Main (225)",
+        "lb.pool_cn": "China",
+        "lb.pool_kr": "Korea",
+        "lb.pool_jp": "Japan",
+        "lb.pool_pending": "This pool has no data yet — the daily batch writes it at 03:30 +0800.",
         "lb.dash": "—",
 
         # ---- /trend 历史趋势（板块 2）------------------------------------
@@ -604,6 +611,12 @@ STR = {
         "lb.note_unreach": "{n} 个站点对探测器返回非 200（多为 WAF 拦截），"
                           "不代表其 agent 友好度低，未计入榜单。",
         "lb.no_data": "还没有榜单数据",
+        "lb.pool_label": "站点池",
+        "lb.pool_main": "主池（225）",
+        "lb.pool_cn": "中国",
+        "lb.pool_kr": "韩国",
+        "lb.pool_jp": "日本",
+        "lb.pool_pending": "该池暂无数据 —— 每日批 03:30（+0800）产出，跑完就有了。",
         "lb.dash": "—",
 
         # ---- /trend 历史趋势（板块 2）------------------------------------
