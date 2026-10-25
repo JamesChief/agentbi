@@ -1,0 +1,118 @@
+# JP pool - 58 sites (2026-10-23)
+# 格式: https://域名 # 品类 | 建站平台(实测指纹)
+# muji.us | apparel | Shopify
+https://muji.us
+# nanamica.com | apparel | 不知道
+https://nanamica.com
+# andwander.com | outdoor | 自研或定制开发
+https://andwander.com
+# sacai.com | apparel | 自研或定制开发
+https://sacai.com
+# kapital.jp | apparel | 不知道
+https://kapital.jp
+# undercoverism.com | apparel | 自研或定制开发
+https://undercoverism.com
+# wtaps.com | apparel | Shopify
+https://wtaps.com
+# neighborhood.jp | apparel | Shopify
+https://neighborhood.jp
+# denime.jp | apparel | WordPress
+https://denime.jp
+# atmos-tokyo.com | shoes | 自研或定制开发
+https://atmos-tokyo.com
+# goodsmile.com | other | 不知道
+https://goodsmile.com
+# amiami.com | other | 自研
+https://amiami.com
+# animate-onlineshop.jp | other | 不知道
+https://animate-onlineshop.jp
+# aniplexplus.com | other | 自研或定制开发
+https://aniplexplus.com
+# tamiya.com | other | 自研或定制开发
+https://tamiya.com
+# kotobukiya.com | other | 自研或定制开发
+https://kotobukiya.com
+# mandarake.co.jp | other | 自研或定制开发
+https://mandarake.co.jp
+# suruga-ya.jp | electronics | 自研或定制开发
+https://suruga-ya.jp
+# clab.us | other | 自研或定制开发
+https://clab.us
+# sigma-global.com | electronics | 自研或定制开发
+https://sigma-global.com
+# tamron.com | electronics | 自研或定制开发
+https://tamron.com
+# nikon.com | electronics | 自研或定制开发
+https://nikon.com
+# canon.com | electronics | 自研或定制开发
+https://canon.com
+# sony.com | electronics | 不知道
+https://sony.com
+# fujifilm.com | electronics | 自研或定制开发
+https://fujifilm.com
+# ricoh-imaging.co.jp | electronics | 自研或定制开发
+https://ricoh-imaging.co.jp
+# korg.com | electronics | 自研或定制开发
+https://korg.com
+# roland.com | electronics | 自研或定制开发
+https://roland.com
+# yamaha.com | other | 自研或定制开发
+https://yamaha.com
+# audio-technica.com | electronics | 不知道
+https://audio-technica.com
+# luxman.co.jp | other | WordPress
+https://luxman.co.jp
+# casio.com | electronics | 自研或定制开发
+https://casio.com
+# citizenwatch.com | other | 不知道
+https://citizenwatch.com
+# jins.com | accessories | 自研或定制开发
+https://jins.com
+# zoff.us | accessories | 自研或定制开发
+https://zoff.us
+# montbell.com | outdoor | 自研或定制开发
+https://montbell.com
+# snowpeak.com | outdoor | 不知道
+https://snowpeak.com
+# goldwin.co.jp | outdoor | 自研或定制开发
+https://goldwin.co.jp
+# dod.jp | outdoor | 自研或定制开发
+https://dod.jp
+# nanga.co.jp | apparel | 自研
+https://nanga.co.jp
+# master-piece.co.jp | accessories | WordPress
+https://master-piece.co.jp
+# shimano.com | outdoor | 自研或定制开发
+https://shimano.com
+# shiseido.com | beauty | 自研或定制开发
+https://shiseido.com
+# sk-ii.com | beauty | Shopify
+https://sk-ii.com
+# kanebo-global.com | beauty | 自研或定制开发
+https://kanebo-global.com
+# fancl.com | beauty | Shopify
+https://fancl.com
+# itoen.com | food | Shopify
+https://itoen.com
+# marukyu-koyamaen.co.jp | food | WordPress
+https://marukyu-koyamaen.co.jp
+# kikkoman.co.jp | food | 自研或定制开发
+https://kikkoman.co.jp
+# balmuda.com | home | 自研或定制开发
+https://balmuda.com
+# hario.co.jp | food | Shopify
+https://hario.co.jp
+# noritake.com | other | 自研或定制开发
+https://noritake.com
+# ya-man.com | beauty | 自研或定制开发
+https://ya-man.com
+# kokuyo.com | home | 自研或定制开发
+https://kokuyo.com
+# misumi.com | other | WordPress
+https://misumi.com
+# magaseek.com | apparel | 自研或定制开发
+https://magaseek.com
+# rakuten.com | other | 自研
+https://rakuten.com
+# fromjapan.com | other | 自研或定制开发
+https://fromjapan.com

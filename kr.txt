@@ -1,0 +1,118 @@
+# KR pool - 58 sites (2026-10-23)
+# 格式: https://域名 # 品类 | 建站平台(实测指纹)
+# anua.com | beauty | Shopify
+https://anua.com
+# cosrx.com | beauty | Shopify
+https://cosrx.com
+# missha.com | beauty | 自研或定制开发
+https://missha.com
+# tonymoly.com | beauty | 自研或定制开发
+https://tonymoly.com
+# innisfree.com | beauty | 自研
+https://innisfree.com
+# skin1004.com | beauty | Shopify
+https://skin1004.com
+# numbuzin.com | beauty | Cafe24
+https://numbuzin.com
+# roundlab.com | beauty | Shopify
+https://roundlab.com
+# iunik.com | beauty | Shopify
+https://iunik.com
+# purito.com | beauty | WordPress
+https://purito.com
+# torriden.com | beauty | MakeShop
+https://torriden.com
+# bentoncosmetics.com | beauty | Cafe24
+https://bentoncosmetics.com
+# sioris.com | beauty | 自研或定制开发
+https://sioris.com
+# dermalstore.com | beauty | WordPress + WooCommerce
+https://dermalstore.com
+# huxley.co.kr | other | Cafe24
+https://huxley.co.kr
+# stylenanda.com | beauty | 自研或定制开发
+https://stylenanda.com
+# romand.co.kr | beauty | Cafe24
+https://romand.co.kr
+# hince.co.kr | beauty | Cafe24
+https://hince.co.kr
+# banilaco.com | beauty | Cafe24
+https://banilaco.com
+# sulwhasoo.com | beauty | Cafe24
+https://sulwhasoo.com
+# thehistoryofwhoo.com | beauty | 自研或定制开发
+https://thehistoryofwhoo.com
+# stylekorean.com | beauty | 自研
+https://stylekorean.com
+# olens.co.kr | beauty | 自研
+https://olens.co.kr
+# x-core.co.kr | accessories | Cafe24
+https://x-core.co.kr
+# global.musinsa.com | apparel | 自研或定制开发
+https://global.musinsa.com
+# 29cm.co.kr | apparel | 自研
+https://29cm.co.kr
+# chuu.co.kr | apparel | Cafe24
+https://chuu.co.kr
+# adererror.com | apparel | 自研或定制开发
+https://adererror.com
+# thisisneverthat.com | apparel | 自研或定制开发
+https://thisisneverthat.com
+# matinkim.com | apparel | Cafe24
+https://matinkim.com
+# dunst.kr | apparel | 自研或定制开发
+https://dunst.kr
+# lowclassic.com | apparel | Cafe24
+https://lowclassic.com
+# covernat.com | apparel | 自研或定制开发
+https://covernat.com
+# maisonkitsune.com | food | 自研或定制开发
+https://maisonkitsune.com
+# wconcept.com | other | 自研或定制开发
+https://wconcept.com
+# spigen.com | electronics | Shopify
+https://spigen.com
+# samsung.com | home | 自研或定制开发
+https://samsung.com
+# cuckoo.co.kr | home | 自研或定制开发
+https://cuckoo.co.kr
+# cuchen.com | home | 自研或定制开发
+https://cuchen.com
+# coway.com | home | 自研或定制开发
+https://coway.com
+# winix.com | home | 自研或定制开发
+https://winix.com
+# zinus.com | home | Shopify
+https://zinus.com
+# neoflam.com | home | 自研或定制开发
+https://neoflam.com
+# kolonsports.com | outdoor | 不知道
+https://kolonsports.com
+# blackyak.com | shoes | 自研或定制开发
+https://blackyak.com
+# ktown4u.com | other | 自研
+https://ktown4u.com
+# withmuu.com | other | 自研或定制开发
+https://withmuu.com
+# smtown.com | other | 自研或定制开发
+https://smtown.com
+# yes24.com | other | 自研或定制开发
+https://yes24.com
+# bibigo.com | food | 自研
+https://bibigo.com
+# wowry.com | other | 不知道
+https://wowry.com
+# samyangfood.com | food | 自研或定制开发
+https://samyangfood.com
+# ottogi.com | food | 自研或定制开发
+https://ottogi.com
+# jejugreen.com | food | Cafe24
+https://jejugreen.com
+# tradekorea.com | other | 自研或定制开发
+https://tradekorea.com
+# coupang.com | other | 自研
+https://coupang.com
+# cafe24.com | other | Cafe24
+https://cafe24.com
+# cosnori.com | beauty | Cafe24
+https://cosnori.com

@@ -1,0 +1,224 @@
+# CN pool - 117 sites (2026-10-23)
+# 格式: https://域名 # 品类 | 建站平台(实测指纹)
+# romwe.com | apparel | 不知道
+https://romwe.com
+# zaful.com | apparel | 不知道
+https://zaful.com
+# cupshe.com | apparel | 不知道
+https://cupshe.com
+# halara.com | apparel | 不知道
+https://halara.com
+# cider.com | apparel | 自研或定制开发
+https://cider.com
+# zeagoo.com | apparel | Shopify
+https://zeagoo.com
+# lilysilk.com | apparel | 自研
+https://lilysilk.com
+# yesstyle.com | beauty | 不知道
+https://yesstyle.com
+# patpat.com | apparel | 不知道
+https://patpat.com
+# urbanrevivo.com | shoes | Shopify
+https://urbanrevivo.com
+# 361sport.com | shoes | Shopify
+https://361sport.com
+# unice.com | accessories | 不知道
+https://unice.com
+# luvme.com | accessories | Shopify
+https://luvme.com
+# nadula.com | accessories | 不知道
+https://nadula.com
+# iseehair.com | accessories | 不知道
+https://iseehair.com
+# hottielashes.com | beauty | 自研或定制开发
+https://hottielashes.com
+# ulike.com | beauty | Shopify
+https://ulike.com
+# cyxus.com | accessories | Shopify
+https://cyxus.com
+# skmei.com | electronics | 自研或定制开发
+https://skmei.com
+# pandahall.com | accessories | 不知道
+https://pandahall.com
+# florasis.com | beauty | Shopify
+https://florasis.com
+# focallure.com | beauty | Shopify
+https://focallure.com
+# feisedy.com | apparel | Shopify
+https://feisedy.com
+# soundcore.com | electronics | Shopify
+https://soundcore.com
+# ugreen.com | electronics | Shopify
+https://ugreen.com
+# baseus.com | electronics | Shopify
+https://baseus.com
+# tomtoc.com | home | Shopify
+https://tomtoc.com
+# pitaka.com | electronics | 不知道
+https://pitaka.com
+# torras.com | electronics | Shopify
+https://torras.com
+# 8bitdo.com | electronics | 不知道
+https://8bitdo.com
+# gamesir.com | electronics | Shopify
+https://gamesir.com
+# epomaker.com | electronics | Shopify
+https://epomaker.com
+# akkogear.com | electronics | 自研或定制开发
+https://akkogear.com
+# anbernic.com | other | Shopify
+https://anbernic.com
+# amazfit.com | electronics | Shopify
+https://amazfit.com
+# edifier.com | electronics | 自研或定制开发
+https://edifier.com
+# shokz.com | electronics | Shopify
+https://shokz.com
+# seeedstudio.com | electronics | Magento
+https://seeedstudio.com
+# dfrobot.com | home | 自研
+https://dfrobot.com
+# sonoff.tech | home | Shopify
+https://sonoff.tech
+# oukitel.com | outdoor | Shopify
+https://oukitel.com
+# doogee.cc | electronics | Shopify
+https://doogee.cc
+# imou.com | home | 自研
+https://imou.com
+# mi.com | electronics | 自研
+https://mi.com
+# tecno-mobile.com | electronics | 自研或定制开发
+https://tecno-mobile.com
+# insta360.com | electronics | 自研
+https://insta360.com
+# dji.com | electronics | 自研或定制开发
+https://dji.com
+# smallrig.com | other | 自研
+https://smallrig.com
+# neewer.com | home | Shopify
+https://neewer.com
+# ulanzi.com | electronics | Shopify
+https://ulanzi.com
+# zhiyun.com | electronics | 自研或定制开发
+https://zhiyun.com
+# hohem.com | electronics | 自研
+https://hohem.com
+# viltrox.com | electronics | Shopify
+https://viltrox.com
+# aputure.com | home | Shopify
+https://aputure.com
+# godox.com | home | 自研或定制开发
+https://godox.com
+# formovie.com | electronics | Shopify
+https://formovie.com
+# pgytech.com | electronics | 不知道
+https://pgytech.com
+# maono.com | electronics | Shopify
+https://maono.com
+# nanlite.com | home | 自研或定制开发
+https://nanlite.com
+# eufy.com | home | Shopify
+https://eufy.com
+# ecovacs.com | home | 自研或定制开发
+https://ecovacs.com
+# dreame.com | home | 自研或定制开发
+https://dreame.com
+# tineco.com | home | 自研或定制开发
+https://tineco.com
+# narwal.com | home | 自研或定制开发
+https://narwal.com
+# lefant.com | home | Shopify
+https://lefant.com
+# roborock.com | home | 自研或定制开发
+https://roborock.com
+# aiper.com | home | WordPress
+https://aiper.com
+# beatbot.com | home | Shopify
+https://beatbot.com
+# aqara.com | electronics | 自研或定制开发
+https://aqara.com
+# reolink.com | electronics | WordPress
+https://reolink.com
+# ezviz.com | home | 自研或定制开发
+https://ezviz.com
+# foscam.com | other | 自研或定制开发
+https://foscam.com
+# veise.com | electronics | 自研或定制开发
+https://veise.com
+# proscenic.com | home | Shopify
+https://proscenic.com
+# lubluelu.com | home | Shopify
+https://lubluelu.com
+# ecoflow.com | electronics | 自研
+https://ecoflow.com
+# ankersolix.com | electronics | Shopify
+https://ankersolix.com
+# bluetti.com | electronics | Shopify
+https://bluetti.com
+# jackery.com | other | Shopify
+https://jackery.com
+# bambulab.com | other | 不知道
+https://bambulab.com
+# creality.com | other | 店匠 Shoplazza
+https://creality.com
+# anycubic.com | other | 自研
+https://anycubic.com
+# zendure.com | electronics | Shopify
+https://zendure.com
+# vevor.com | other | 自研
+https://vevor.com
+# worx.com | home | 自研或定制开发
+https://worx.com
+# greenworkstools.com | other | 不知道
+https://greenworkstools.com
+# civitium.com | other | 自研或定制开发
+https://civitium.com
+# homary.com | home | 自研/定制
+https://homary.com
+# mlily.com | home | 自研或定制开发
+https://mlily.com
+# gracekids.com | other | Squarespace
+https://gracekids.com
+# petkit.com | electronics | Shopify
+https://petkit.com
+# popmart.com | other | 自研
+https://popmart.com
+# robosen.com | other | 自研或定制开发
+https://robosen.com
+# momcozy.com | other | Shopify
+https://momcozy.com
+# naturehike.com | outdoor | Shopify
+https://naturehike.com
+# mobigarden.com | outdoor | Shopify
+https://mobigarden.com
+# kailasgear.com | outdoor | Shopify
+https://kailasgear.com
+# lixada.com | outdoor | 自研或定制开发
+https://lixada.com
+# santic.com | outdoor | Shopify
+https://santic.com
+# merach.com | other | 自研
+https://merach.com
+# goture.com | outdoor | Shopify
+https://goture.com
+# kastking.com | other | Shopify
+https://kastking.com
+# sougayilang.com | other | 不知道
+https://sougayilang.com
+# engwe.com | other | Shopify
+https://engwe.com
+# ninebot.com | other | 自研或定制开发
+https://ninebot.com
+# niu.com | electronics | 自研
+https://niu.com
+# yadea.com | other | 自研
+https://yadea.com
+# samebike.com | other | Shopify
+https://samebike.com
+# himiwaybikes.com | other | Shopify
+https://himiwaybikes.com
+# enya.com | electronics | 不知道
+https://enya.com
+# donnermusic.com | electronics | 自研
+https://donnermusic.com
