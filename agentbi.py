@@ -974,6 +974,26 @@ def render(r, lang=S.DEFAULT):
                              transport=e["transport"], endpoint=e["endpoint"]))
     if r["protocols"]["paths"] or r["protocols"]["tokens"]:
         L.append(S.t("rep.protocols", lang, protos=r["protocols"]))
+    # A 档明细（扫描字段升级清单）：让"AI 为什么抓不到你"有可指认的落点。
+    # 一律不进总分 —— 改分数会断掉既有时间序列。
+    infra, nojs, seo = r.get("infra") or {}, r.get("nojs") or {}, r.get("seo") or {}
+    na = S.t("rep.na", lang)
+    yn = lambda b: S.t("rep.yes", lang) if b else S.t("rep.no", lang)
+    chars = nojs.get("text_chars")
+    L.append("\n" + S.t("rep.measured_head", lang))
+    L.append(S.t("rep.infra_line", lang, cdn=infra.get("cdn") or na,
+                 waf=infra.get("waf") or na))
+    L.append(S.t("rep.nojs_line", lang,
+                 chars=chars if chars is not None else na,
+                 price=yn(nojs["price_hint"]) if nojs.get("price_hint") is not None else na,
+                 readable=yn(nojs["readable"]) if nojs.get("readable") is not None else na))
+    L.append(S.t("rep.llms_line", lang, lines=r["llms"].get("lines"),
+                 flag=yn(r["llms"]["has_products"]) if r["llms"].get("lines") else na))
+    L.append(S.t("rep.seo_line", lang, c=seo.get("canonical") or S.t("rep.no", lang),
+                 n=len(seo.get("hreflang") or []), m=len(seo.get("og_tags") or [])))
+    types = r["structured"].get("types") or []
+    L.append(S.t("rep.types_line", lang,
+                 t=", ".join(types) if types else S.t("rep.no", lang)))
     if r["fixes"]:
         # 老快照（缓存里 3 元组）没有分组字段，一律按商业类处理——
         # 改动前它们就是跟 UCP/Product 混在一起的。

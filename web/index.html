@@ -96,6 +96,18 @@ function render(r){
           `<table><tr><th>${esc(T('rep.service'))}</th><th>${esc(T('rep.version'))}</th>`+
           `<th>${esc(T('rep.transport'))}</th></tr>${svc}</table>`;
   }
+  // A 档明细（扫描字段升级清单）：只做解释，不进总分。
+  const na = T('rep.na');
+  const yn = b => (b === null || b === undefined) ? na : (b ? T('rep.yes') : T('rep.no'));
+  const infra = r.infra || {}, nojs = r.nojs || {}, seo = r.seo || {};
+  const lms = r.llms || {}, types = (r.structured && r.structured.types) || [];
+  const measured = `<h3>${esc(T('rep.measured_head'))}</h3><ul class="fix">
+    <li>${esc(fill(T('rep.infra_line'), {cdn: infra.cdn || na, waf: infra.waf || na}))}</li>
+    <li>${esc(fill(T('rep.nojs_line'), {chars: (nojs.text_chars === undefined || nojs.text_chars === null) ? na : nojs.text_chars, price: yn(nojs.price_hint), readable: yn(nojs.readable)}))}</li>
+    <li>${esc(fill(T('rep.llms_line'), {lines: lms.lines === undefined ? na : lms.lines, flag: lms.lines ? yn(lms.has_products) : na}))}</li>
+    <li>${esc(fill(T('rep.seo_line'), {c: seo.canonical || T('rep.no'), n: (seo.hreflang || []).length, m: (seo.og_tags || []).length}))}</li>
+    <li>${esc(fill(T('rep.types_line'), {t: types.length ? types.join(', ') : T('rep.no')}))}</li></ul>`;
+
   const fixHtml = fs => fs.map(f =>
     `<li><span class="pri pri-${esc(f[1])}">${esc(T('pri.'+f[1]))}</span> <b>${esc(f[0])}</b><br>${esc(f[2])}</li>`).join('');
   const grp = f => (f[3] || 'commerce');
@@ -109,7 +121,7 @@ function render(r){
     ${coreLine}
     <p class="sub">${esc(T('rep.checked'))} <code>${esc(r.checked_url)}</code>（${esc(r.checked_kind)}）</p>
     <table class="dim">${rows}</table>
-    ${ucp}${probe}
+    ${ucp}${probe}${measured}
     ${coreFx.length?`<h3>${esc(T('rep.fixes'))}</h3><ul class="fix">${fixHtml(coreFx)}</ul>`:''}
     ${comFx.length?`<h3>${esc(T('rep.fixes_commerce'))}</h3><ul class="fix">${fixHtml(comFx)}</ul>`:''}`;
 }

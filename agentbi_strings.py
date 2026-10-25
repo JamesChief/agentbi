@@ -431,6 +431,15 @@ STR = {
         "rep.fixes_core": "  what to fix (applies to every site):",
         "rep.fixes_commerce": "  commerce readiness — skip these if the site sells nothing:",
         "rep.fix_line": "    [{pri}] {title}\n         {desc}",
+        "rep.measured_head": "  beyond the score:",
+        "rep.infra_line": "    CDN {cdn} · WAF {waf}",
+        "rep.nojs_line": "    no-JS text {chars} chars · price in HTML {price} · readable {readable}",
+        "rep.llms_line": "    llms.txt {lines} lines · commerce content {flag}",
+        "rep.seo_line": "    canonical {c} · hreflang {n} · og tags {m}",
+        "rep.types_line": "    JSON-LD types {t}",
+        "rep.yes": "yes",
+        "rep.no": "no",
+        "rep.na": "not identified",
 
         # ---------------------------------------------------------- 修复清单
         "fix.ucp_missing.title": "Deploy a UCP manifest",
@@ -837,6 +846,15 @@ STR = {
         "rep.fixes_core": "  修复清单（所有站点都适用）:",
         "rep.fixes_commerce": "  商业就绪（不做交易的站不适用这几条）:",
         "rep.fix_line": "    [{pri}] {title}\n         {desc}",
+        "rep.measured_head": "  评分之外的实测明细：",
+        "rep.infra_line": "    CDN {cdn} · WAF {waf}",
+        "rep.nojs_line": "    不渲染 JS 的正文 {chars} 字符 · HTML 里有价格 {price} · 可读 {readable}",
+        "rep.llms_line": "    llms.txt {lines} 行 · 含商品信息 {flag}",
+        "rep.seo_line": "    canonical {c} · hreflang {n} 个 · og 标签 {m} 个",
+        "rep.types_line": "    JSON-LD 类型 {t}",
+        "rep.yes": "有",
+        "rep.no": "无",
+        "rep.na": "未识别",
 
         "fix.ucp_missing.title": "部署 UCP manifest",
         "fix.ucp_missing.desc": "{path} 返回 {status}。UCP 已有一手核实的站点侧标识，"
