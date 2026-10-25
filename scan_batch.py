@@ -143,6 +143,24 @@ def one(url, do_probe):
             "price": "price" in r["structured"]["fields"],
             "availability": "availability" in r["structured"]["fields"],
             "llms": r["llms"]["present"],
+            # ---- A 档（扫描字段升级清单，2026-10-25 落地）：零额外请求，全部来自已抓响应。
+            # 序列从落地这天起才有，老快照缺这些字段一律按"未测量"处理（不是 0）。
+            "llms_sha": r["llms"].get("sha"),
+            "llms_lines": r["llms"].get("lines"),
+            "llms_has_products": r["llms"].get("has_products"),
+            "robots_sha": r["robots"].get("sha"),
+            # 逐 agent 的 robots 结论（allow/disallow）。跟实测的 blocked_agents 并列，
+            # 才分得出"robots 说允许、但被 WAF 挡"这一种。
+            "robots_agent_rules": r["robots"].get("agent_rules") or {},
+            "cdn": (r.get("infra") or {}).get("cdn"),
+            "waf": (r.get("infra") or {}).get("waf"),
+            "jsonld_types": r["structured"].get("types") or [],
+            "nojs_readable": (r.get("nojs") or {}).get("readable"),
+            "nojs_text_chars": (r.get("nojs") or {}).get("text_chars"),
+            "nojs_price_hint": (r.get("nojs") or {}).get("price_hint"),
+            "canonical": (r.get("seo") or {}).get("canonical"),
+            "hreflang": (r.get("seo") or {}).get("hreflang") or [],
+            "og_tags": (r.get("seo") or {}).get("og_tags") or [],
             # 存明细而不只是布尔值：/crawlers 普查页要按 agent 逐个统计，
             # 且这是要天天对比的序列（谁开始封锁 GPTBot 是有新闻性的数字）。
             "robots_blocks_agents": bool(r["robots"].get("rules")),

@@ -13,6 +13,7 @@
     编造路径会给出错误结论。
 """
 import argparse
+import hashlib
 import ipaddress
 import json
 import re
@@ -248,6 +249,9 @@ def check_structured(text):
     prod, offer = find_product(nodes)
     r = {
         "jsonld_blocks": len(LD_JSON.findall(text)),
+        # 页面里**所有**结构化数据类型，不只是 Product。加 schema 是 GEO 的日常活，
+        # 只有 Product 布尔看不见别人做了什么（Organization / FAQ / Breadcrumb…）。
+        "types": sorted({t for n in nodes for t in _types(n)})[:30],
         "has_product": prod is not None,
         "has_offer": offer is not None,
         "fields": {},
@@ -279,9 +283,13 @@ def check_llms(origin, ua, timeout=15):
     lines = [l.strip() for l in body.splitlines() if l.strip()]
     links = [l for l in lines if l.startswith(("-", "*", "[")) or l.startswith("http")]
     present = (r["status"] == 200 and len(lines) > 0 and not is_html and not redirected)
+    # 内容指纹 + 有没有商品信息："有 llms.txt"已经不是差异点，内容质量才是。
+    # sha 用前 12 位十六进制，够做"今天和昨天是不是同一份"的比对。
     return {"status": r["status"], "bytes": r["bytes"], "lines": len(lines),
             "links": len(links), "present": present, "redirected": redirected,
-            "is_html": is_html, "final_url": r["final_url"]}
+            "is_html": is_html, "final_url": r["final_url"],
+            "sha": hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()[:12] if body else None,
+            "has_products": bool(LLMS_COMMERCE_RE.search(body)) if body else False}
 
 
 # ------------------------------------------------------------------- robots.txt
@@ -293,10 +301,18 @@ AGENT_TOKENS = list(AGENTS.keys()) + ["Google-Extended", "CCBot", "anthropic-ai"
 def check_robots(origin, ua, timeout=15):
     r = fetch(urljoin(origin, "/robots.txt"), ua, timeout)
     res = {"status": r["status"], "rules": {}, "wildcard_disallow": False, "present": False,
-           "raw": r["text"][:200_000]}
+           "raw": r["text"][:200_000], "sha": None, "agent_rules": {}}
     if r["status"] != 200:
         return res
     res["present"] = True
+    res["sha"] = hashlib.sha256(
+        r["text"].encode("utf-8", "replace")).hexdigest()[:12] if r["text"] else None
+    # 逐个 agent 的 allow/disallow 结论（对 "/"）。代理商要的是"GPTBot 能不能进"，
+    # 不是一个笼统的布尔；跟实测的 blocked_agents 放一起还能分出
+    # "robots 说允许但被 WAF 挡"这一种。只判我们实际探测的那 6 个 agent。
+    res["agent_rules"] = {
+        tok: ("allow" if robots_allows(r["text"], tok, "/") else "disallow")
+        for tok in AGENTS}
     cur_agents, cur_allow = [], None
     for raw in r["text"].splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -378,6 +394,92 @@ def robots_allows(robots_text, ua, path):
 
 PRICE_HINT = re.compile(
     r'(itemprop=["\']price|"price"\s*:|priceCurrency|\bUSD\s?\$|\$\s?\d)', re.I)
+
+# ------------------------------------------------- A 档字段（零额外请求，见 扫描字段升级清单）
+
+# CDN / WAF 只按响应头的**特征**判定，认不出就给 None（不猜）。
+# 判不出的比例本身就是结论：认不出来不代表没有。
+INFRA_CDN = (
+    ("Cloudflare", lambda h, s, j: "cf-ray" in h or "cf-cache-status" in h),
+    ("Fastly", lambda h, s, j: h.get("x-served-by", "").startswith("cache-") or "fastly" in j),
+    ("Akamai", lambda h, s, j: "akamaighost" in s or any(k.startswith("x-akamai") for k in h)),
+    ("CloudFront", lambda h, s, j: "cloudfront" in s or any(k.startswith("x-amz-cf") for k in h)),
+    ("Vercel", lambda h, s, j: any(k.startswith("x-vercel") for k in h)),
+    ("Netlify", lambda h, s, j: "x-nf-request-id" in h),
+)
+
+INFRA_WAF = (
+    ("Cloudflare", lambda h, s, j: "cf-mitigated" in h or "cloudflare" in s or "cf-ray" in h),
+    ("Akamai", lambda h, s, j: any(k.startswith("x-akamai") for k in h)
+     or "akamaighost" in s or "x-waf" in h),
+    ("AWS WAF", lambda h, s, j: "x-amzn-waf" in j or "awswaf" in j),
+    ("Imperva", lambda h, s, j: "incapsula" in j or "x-iinfo" in h or "visid_incap" in j),
+    ("Sucuri", lambda h, s, j: "x-sucuri" in j or "sucuri" in s),
+    ("F5", lambda h, s, j: "x-waf-event-info" in h or "f5-trace" in j or "bigip" in j),
+    ("Wordfence", lambda h, s, j: "wordfence" in j),
+)
+
+CANONICAL_RE = re.compile(r"<link[^>]+rel=[\"']?canonical[\"'][^>]*>", re.I)
+HREFLANG_RE = re.compile(
+    r"<link[^>]+rel=[\"']?alternate[\"'][^>]+hreflang=[\"']?([^\"'\s>]+)", re.I)
+OG_RE = re.compile(r"<meta[^>]+property=[\"'](og:[a-z_:]+)[\"']", re.I)
+HREF_RE = re.compile(r"href=[\"']([^\"']+)[\"']", re.I)
+
+# llms.txt 里有没有商品/定价信息：heuristic，只作为"内容够不够"的粗筛。
+LLMS_COMMERCE_RE = re.compile(
+    r"\b(price|pricing|product|products|cart|checkout|sku|collection|shop)\b", re.I)
+
+
+def detect_infra(headers):
+    """从响应头识别 CDN / WAF。零额外请求（首页本来就要抓）。
+
+    "你被 Cloudflare 挡了"是解释"AI 为什么抓不到你"最直观的一条，所以进每日批；
+    识别不出就返回 None —— 认不出 ≠ 没有，别把 None 当成"无 WAF"对外讲。
+    """
+    h = {str(k).lower(): str(v or "") for k, v in (headers or {}).items()}
+    s, j = h.get("server", ""), " ".join(f"{k}:{v}" for k, v in h.items()).lower()
+    cdn = waf = None
+    for name, test in INFRA_CDN:
+        if test(h, s, j):
+            cdn = name
+            break
+    for name, test in INFRA_WAF:
+        if test(h, s, j):
+            waf = name
+            break
+    return {"cdn": cdn, "waf": waf}
+
+
+def page_seo(text):
+    """基础 GEO 卫生：canonical / hreflang / og tags。纯解析已抓到的 HTML。"""
+    t = text or ""
+    canon = None
+    m = CANONICAL_RE.search(t)
+    if m:
+        hm = HREF_RE.search(m.group(0))
+        canon = (hm.group(1).strip()[:500] if hm else None) or None
+    return {"canonical": canon,
+            "hreflang": sorted({x.lower() for x in HREFLANG_RE.findall(t)})[:20],
+            "og_tags": sorted({x.lower() for x in OG_RE.findall(t)})[:20]}
+
+
+def nojs_readability(text, struct):
+    """不渲染 JS 时能读到什么（我们本来就不渲染 JS，所以零额外请求）。
+
+    text_chars = 剥掉 script/style/noscript/template 后的可见文本字符数。
+    readable 是给"AI 能不能读懂你"这条结论用的解释性口径，**不进总分** ——
+    改分数会断掉既有时间序列。
+    """
+    t = text or ""
+    body = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", t)
+    body = re.sub(r"(?s)<[^>]+>", " ", body)
+    body = re.sub(r"&[a-z#0-9]+;", " ", body, flags=re.I)
+    chars = len(re.sub(r"\s+", " ", body).strip())
+    price = bool(PRICE_HINT.search(t))
+    # readable = "不渲染 JS 也读得到东西"：正文够长，或者页面里有 JSON-LD 商品数据。
+    # 价格文本（price_hint）单独留着——它是商店站的加分信号，不该让非商店站被判成读不到。
+    return {"text_chars": chars, "price_hint": price,
+            "readable": chars >= 200 or bool(struct.get("has_product"))}
 
 
 def probe_agents(url, timeout=15, delay=0.5):
@@ -800,6 +902,15 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
     protos = (probe_unverified(origin, home["text"], UA_SCANNER) if unverified
               else {"paths": {}, "tokens": []})
     platform = detect_platform(home["headers"], home["text"])
+    # A 档字段（扫描字段升级清单）：全部来自已经抓到的响应，零额外请求。
+    # 首页没拿到 200 / 不是 HTML 时，SEO 与 nojs 字段无从谈起 —— 按"未测量"落 None，
+    # 不拿错误页去算（老口径：缺字段 = 未测量，不是 0）。WAF/CDN 例外：403 页的头最有用。
+    infra = detect_infra(home["headers"])
+    if home["status"] == 200 and is_html_response(home["headers"], home["text"]):
+        seo, nojs = page_seo(home["text"]), nojs_readability(home["text"], struct)
+    else:
+        seo = {"canonical": None, "hreflang": [], "og_tags": []}
+        nojs = {"text_chars": None, "price_hint": None, "readable": None}
 
     if do_probe:
         probe = probe_agents(target, timeout)
@@ -815,6 +926,7 @@ def run(url, timeout=15, do_probe=True, discover=False, product_url=None,
             "score": total, "detail": detail, "core_score": detail["_core"],
             "structured": struct, "llms": llms,
             "robots": robots, "ucp": ucp, "server_card": server_card,
+            "infra": infra, "seo": seo, "nojs": nojs,
             "origin": origin, "probe": probe, "protocols": protos,
             # host selection 是 #867 frame 的 run field，必须随每次运行公开：
             # 探的是哪个 host、它跟种子是什么关系、有没有 settle 到非店主机。
