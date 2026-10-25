@@ -306,22 +306,27 @@ def _positives(rows):
     return out
 
 
-def _prev_snapshot(today):
-    """history/ 里今天之前最近的一份快照文件名；没有（第一天）返回 None。"""
+def _prev_snapshot(today, prefix="batch-"):
+    """history/ 里今天之前最近的一份快照文件名；没有（第一天）返回 None。
+
+    prefix 用于分池：扩展池的快照叫 batch-cn-<date>.json，不能拿主池的快照当它的"上一次"
+    （成员都不一样，比出来的 entered/left 全是假的）。
+    """
     if not os.path.isdir("history"):
         return None
+    n = len(prefix)
     cands = [f for f in os.listdir("history")
-             if f.startswith("batch-") and f.endswith(".json") and f[6:16] < today]
+             if f.startswith(prefix) and f.endswith(".json") and f[n:n + 10] < today]
     return sorted(cands)[-1] if cands else None
 
 
-def delta_block(rows, today):
+def delta_block(rows, today, prefix="batch-"):
     """相对上一次 pass 的变化：进了哪些、掉了哪些、声明版本怎么分布。
 
     ucp#867 的 frame 把这两项设为可选字段（2026-10-23 frmoretto 加的），
     目的就是让"数量变了"不被读成采用率在动。只跟生产快照比，试跑不产 delta。
     """
-    prev_file = _prev_snapshot(today)
+    prev_file = _prev_snapshot(today, prefix)
     if not prev_file:
         return None
     try:
@@ -359,6 +364,11 @@ def main():
         print(f"写入 leaderboard.md（从 batch.json 的 {len(rows)} 行重渲染）", file=sys.stderr)
         return
 
+    # 分池（2026-10-25）：主池 225 的数字已对外引用过，扩展池单独成文件、单独成序列，
+    # 绝不并进 batch.json —— 并池会改掉分母，之前对外报的数就对不上了。
+    pool = next((a.split("=", 1)[1].strip() for a in sys.argv[1:]
+                 if a.startswith("--pool=") and a.split("=", 1)[1].strip()), None)
+    sfx = "-%s" % pool if pool else ""
     do_probe = "--probe" in flags
     if args:
         sites = [l.strip() for l in open(args[0]) if l.strip() and not l.startswith("#")]
@@ -366,8 +376,8 @@ def main():
         sites = DEFAULT_SITES
     # 不传站点文件就是试跑，写 *.test.*；要覆盖生产数据得显式 --live
     dry = "--live" not in flags
-    batch_path = "batch.test.json" if dry else "batch.json"
-    lb_path = "leaderboard.test.md" if dry else "leaderboard.md"
+    batch_path = "batch%s.test.json" % sfx if dry else "batch%s.json" % sfx
+    lb_path = "leaderboard%s.test.md" % sfx if dry else "leaderboard%s.md" % sfx
     if dry:
         print(f"试跑模式：写 {batch_path} / {lb_path}，不动生产数据（要覆盖请加 --live）",
               file=sys.stderr)
@@ -397,7 +407,7 @@ def main():
 
     if not dry:
         # 只跟生产快照比：试跑数据不能混进对外序列
-        delta = delta_block(rows, time.strftime("%Y-%m-%d"))
+        delta = delta_block(rows, time.strftime("%Y-%m-%d"), "batch%s-" % sfx)
         if delta:
             out["delta"] = delta
             print("delta 对比 %s：进 %d / 掉 %d" % (delta["prev_date"], len(delta["entered"]), len(delta["left"])), file=sys.stderr)
@@ -409,7 +419,7 @@ def main():
     snap = "-"
     if not dry:
         os.makedirs("history", exist_ok=True)
-        snap = f"history/batch-{time.strftime('%Y-%m-%d')}.json"
+        snap = f"history/batch{sfx}-{time.strftime('%Y-%m-%d')}.json"
         if not os.path.exists(snap):
             write_text(snap, json.dumps(out, ensure_ascii=False, indent=1))
 
