@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import time
+import random
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
@@ -178,6 +179,10 @@ def one(url, do_probe):
         return {"site": url, "error": f"{type(e).__name__}: {e}"}
 
 
+# 对照路径（nonsense control path）：每天随机一次，避免站端按路径缓存。
+# 名字带 nonce 而不是某个真实动词，任何实现都不会注册它 —— 这就是对照的意思。
+CONTROL_PATH = "/.well-known/nonce-%08x" % random.getrandbits(32)
+
 # 对照请求的间隔。403 站里混着限流（实测 bombas 三个 UA 全 429 是因为当天 batch 刚扫过），
 # 打太快会把自己挡在外面，而且这里已经是在别人门口多敲一次门了。
 CONTROL_DELAY = 2.0
@@ -205,6 +210,52 @@ def control_pass(rows):
             r["home_ctrl_bytes"] = None
         n += 1
         time.sleep(CONTROL_DELAY)
+    return n
+
+
+def ucp_control_pass(rows):
+    """对照路径（nonsense control path）逐站补一枪，用来给 row 1 泼冷水。
+
+    ucp#867 里 kinlane 的人口级普查（2026-10-30, 27,662 host）在路径清单末尾加了一个 nonsense 路径：
+    他的 row 1 有 3,207 个 HTTP 200，其中 2,484 个连 nonsense 路径也回 200 —— 只看状态码会把
+    /.well-known/ucp 的"通用管理费"高估约七倍。我们每天都跑同一批站，从来没问过同一个问题。
+
+    所以这里每站补发一次 nonsense 路径，与主电路同一 UA、同样不跟随 3xx、同样一次不重试，
+    逐站与原 ucp_status 交叉分桶。它**不参与 present 判定**，只是 row 1 旁边的一列，
+    和已有的 home_ctrl_*（浏览器 UA 对照）是同一个思路：把两个长得一模一样的桶分开。
+
+    2026-11-01 首次实测（KR，主池 225）：row 1 = 69，其中 **7 个（10%）**也答 nonsense 200，
+    6 个本身是 HTML 软 200已被 ucp_is_html 单独剔除；唯一命中 positives 的是 arcteryx.com，
+    而它两个路径的响应体不同（/ucp 是 UCP JSON，nonsense 是 S3 的 AccessDenied XML）——
+    同一个状态码 + 同一个 content-type，却是两件事：**对照要比 body，不能只看 status**。
+    跟他的人口级普查差了 8 倍，差的是抽样框不是 UCP（我们这份几乎全是 Shopify 站点）。
+    """
+    n = 0
+    for r in rows:
+        if r.get("error") or r.get("ucp_robots_refused"):
+            continue           # robots 拒绝的行没发过主请求，也就没有对照可言
+        seed = urlparse(r.get("site") or "").netloc
+        settled = (r.get("settled_host") or "").strip()
+        # 复盘主电路实际探的 host：unsettled 的行用种子 host（与 check_ucp 的入参一致）
+        host = seed if (r.get("host_unsettled") or not settled) else settled
+        if not host:
+            continue
+        target = "https://%s%s" % (host, CONTROL_PATH)
+        try:
+            c = A.fetch(target, A.UA_SCANNER, timeout=12, follow=False)
+            status, text = c.get("status"), (c.get("text") or "")[:1024]
+        except Exception:
+            status, text = None, ""
+        r["ucp_ctrl_status"] = status
+        r["ucp_ctrl_bytes"] = c.get("bytes") if status is not None else None
+        if status is None:
+            continue
+        r["ucp_ctrl_ctype"] = ((c.get("headers") or {}).get("Content-Type") or ""
+                               ).split(";")[0].strip().lower()
+        # 只标记"看起来是 HTML"这一现象，判定留给读者：status 相同不等于同源
+        r["ucp_ctrl_is_html"] = bool(text[:512].lstrip()[:9].lower().startswith(
+            ("<!doctype", "<html")))
+        n += 1
     return n
 
 
@@ -397,13 +448,23 @@ def main():
     print(f"对照请求 {n_ctrl} 次（非 200 站点补一次浏览器 UA）："
           f"{ctrl_ok} 家放真人、挡脚本/agent，其余为本扫描器 vantage 不可达", file=sys.stderr)
 
+    # 第二组对照：nonsense 路径（ucp#867，kinlane 2026-10-30 用同法量的 row 1 水分）
+    n_ucp_ctrl = ucp_control_pass(rows)
+    row1 = sum(1 for r in rows if not r.get("error") and r.get("ucp_status") == 200)
+    row1_ctrl = sum(1 for r in rows if not r.get("error") and r.get("ucp_status") == 200
+                    and r.get("ucp_ctrl_status") == 200)
+    print(f"UCP 对照路径 {n_ucp_ctrl} 次（{CONTROL_PATH}）：row 1（200）{row1} 站，"
+          f"其中 {row1_ctrl} 站对 nonsense 路径也回 200 —— 只看状态码会高估这么多",
+          file=sys.stderr)
+
     ok = [r for r in rows if not r.get("error")]
     vantage = detect_vantage()
     print(f"探测地: {vantage.get('country')} {vantage.get('city') or ''}", file=sys.stderr)
     # vantage 必须随数据一起发布：geo-redirect 的结果取决于探测位置
     out = {"generated_at": time.time(), "vantage": vantage,
            "ucp_route": A.UCP_PATH, "server_card_route": A.SERVER_CARD_PATH,
-           "rows": rows}
+           # 对照路径必须与数据一起发布：它是 row 1 的判据之一，换个 nonce 就是另一次测量
+           "control_path": CONTROL_PATH, "rows": rows}
 
     if not dry:
         # 只跟生产快照比：试跑数据不能混进对外序列
