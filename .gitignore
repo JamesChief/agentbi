@@ -27,3 +27,7 @@ contacts.py
 # 榜单条目纠错/下架/认领。跟 subscribers.jsonl 一样：服务器上是唯一真实数据，
 # 部署包里绝不能带（会把线上数据覆盖回去）。
 corrections.jsonl
+
+# 方向 2：worker 即时端点在运行时生成的 pin 缓存（本地验收产物，不进仓库）。
+# 服务器上对应 /opt/agentbi/tool_product_pins.json，由 worker 运行时维护。
+tool_product_pins.json

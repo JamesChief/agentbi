@@ -10,15 +10,19 @@
 """
 import argparse
 import html
+import importlib
 import ipaddress
 import json
 import os
 import re
+import sys
 import threading
 import time
 from collections import deque
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
+
+import requests
 
 import agentbi as A
 import categories as C
@@ -66,14 +70,194 @@ URL_RE = re.compile(r"^https?://[^\s<>\"]{4,200}$", re.I)
 # 刻意宽松：邮箱地址的合法形态太多，严格校验只会误杀。真正的确认是收信，不是正则。
 EMAIL_RE = re.compile(r"^[^@\s,;]{1,64}@[^@\s,;]+\.[^@\s,;.]{2,}$")
 
+# ---- M0 工具即时端点（2026-11-07，方向 2）----------------------------------
+# 只做「按任意域名即时跑一次 M0 单站函数」，返回**单次实测字段**；
+# 不做跨日 diff、不产事件、不写快照。四个 tool_*.py 是两台观察者共用的部署件，
+# 这里只 import 调用，脚本本身一行不改，30 站每日序列不受影响。
+TOOL_DIR = os.environ.get("AGENTBI_TOOL_DIR", "/opt/agentbi-tools")
+TOOL_MODULES = {
+    "indexability": "tool_indexability",
+    "product-data": "tool_product_data",
+    "speed": "tool_speed",
+    "competitor-catalog": "tool_catalog",
+}
+TOOL_REDIRECTS = 6
+TOOL_PROBE_TIMEOUT = 8       # 入口预检单跳超时（整次检测的 45s 超时在站点侧）
+TOOL_UA = "Mozilla/5.0 (compatible; AgentBI-M0-tool/1.0)"
+TOOL_CACHE_TTL = 600         # 与 DOMAIN_COOLDOWN 一致：冷却期内复用上次结果，不重复真扫
+# M0 端点独立 IP 桶：用户会连续测 4 个工具并重试，10 次/5min（/api/check 的值）太紧。
+# 只影响新端点，/api/check 的 RATE_MAX 与配额一个字不改。
+TOOL_RATE_MAX = int(os.environ.get("AGENTBI_TOOL_RATE_MAX", "30"))
+_tool_lock = threading.Lock()
+_tool_mods = {}
+_tool_cache = {}             # (tool_id, url) -> (ts, payload)
 
-def rate_ok(ip):
+
+def _tool_safe_url(url):
+    """比 /api/check 更严：只放行公网 IP + 80/443；IP 判定复用 agentbi.is_safe_url。"""
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    if p.port not in (None, 80, 443):
+        return False
+    if p.username or p.password:
+        return False
+    return A.is_safe_url(url)
+
+
+def _tool_redirects_ok(url):
+    """入口重定向链逐跳校验：allow_redirects=False，每跳重新过 _tool_safe_url。
+    stream=True 只取响应头，不下载正文，避免预检本身变成一次完整抓取。
+    """
+    cur = url
+    for _ in range(TOOL_REDIRECTS):
+        if not _tool_safe_url(cur):
+            return False
+        try:
+            r = requests.get(cur, headers={"User-Agent": TOOL_UA},
+                             timeout=TOOL_PROBE_TIMEOUT,
+                             allow_redirects=False, stream=True)
+            loc = r.headers.get("location")
+            is_redirect = r.is_redirect
+            r.close()
+        except Exception:
+            return False
+        if is_redirect and loc:
+            cur = urljoin(cur, loc)
+            continue
+        return True
+    return False
+
+
+def _guard_tool_module(mod):
+    """工具内部每个出站请求也过 host/IP + 端口校验（脚本文件不动，只替换运行时引用）。
+
+    边界（如实记录）：tool_base.get / head / get_capped 用 allow_redirects=True，
+    重定向后的目标不在本层校验；入口链已逐跳校验，工具内部 URL 多来自站点自身内容。
+    """
+    for name in ("get", "head", "get_capped"):
+        orig = getattr(mod, name, None)
+        if orig is None:
+            continue
+        arity = 3 if name == "head" else 4
+
+        def make(fn, n):
+            def wrapped(url, *a, **kw):
+                if not _tool_safe_url(url):
+                    return (False, 403, {}) if n == 3 else (False, 403, {}, "")
+                return fn(url, *a, **kw)
+            return wrapped
+        setattr(mod, name, make(orig, arity))
+
+
+def _load_tool(tool_id):
+    with _tool_lock:
+        if tool_id in _tool_mods:
+            return _tool_mods[tool_id]
+        if TOOL_DIR not in sys.path:
+            sys.path.insert(0, TOOL_DIR)
+        mod = importlib.import_module(TOOL_MODULES[tool_id])
+        _guard_tool_module(mod)
+        # product-data 的 pin 缓存默认写在 TOOL_DIR（/opt/agentbi-tools），但 worker 的
+        # ProtectSystem=strict 只放行 /opt/agentbi，写原路径会 OSError(30) 让检测 500。
+        # tool_*.py 是两台观察者共用部署件，文件不动，只在运行时把缓存路径指到可写目录；
+        # 即时端点的 pin 缓存与每日跑批的那份分开，互不影响（都只是商品 URL 缓存）。
+        if tool_id == "product-data" and hasattr(mod, "PINS"):
+            mod.PINS = os.path.join(HERE, "tool_product_pins.json")
+        _tool_mods[tool_id] = mod
+        return mod
+
+
+def _tool_cooldown_free(host):
+    """只读检查冷却，不消耗。成功后才由 _tool_cooldown_mark 标记。"""
+    with _lock:
+        t = _domain_at.get((host, "tool"))
+        return not (t and time.time() - t < DOMAIN_COOLDOWN)
+
+
+def _tool_cooldown_mark(host):
+    with _lock:
+        if len(_domain_at) > 5000:
+            now = time.time()
+            for k, t in list(_domain_at.items()):
+                if now - t > DOMAIN_COOLDOWN:
+                    del _domain_at[k]
+        _domain_at[(host, "tool")] = time.time()
+
+
+def tool_run(tool_id, url, lang, ip):
+    """返回 (payload, status)。成功与软失败都是 200 + measured；拒绝/限流用非 200。"""
+    if tool_id not in TOOL_MODULES:
+        return {"error": "unknown tool"}, 404
+    if not URL_RE.match(url) or not _tool_safe_url(url):
+        return {"error": "bad url"}, 400
+    # 缓存命中直接返回，不消耗限流、不消耗域名冷却，也不必再做重定向预检
+    # （同一 URL 上次已完整校验过；与 /api/check 同一套语义）。
+    cache_key = (tool_id, url)
+    with _lock:
+        hit = _tool_cache.get(cache_key)
+        if hit and time.time() - hit[0] < TOOL_CACHE_TTL:
+            out = dict(hit[1])
+            out["cached"] = True
+            return out, 200
+    if not _tool_redirects_ok(url):
+        return {"error": "blocked redirect"}, 400
+    # 双层限流：IP 层沿用 rate_ok 但用独立 key（加 "tool:" 前缀），
+    # 免得工具即时检测把 /api/check 的 10 次/5min 配额挤光；域名层沿用 domain_ok 冷却。
+    if not rate_ok("tool:" + ip, TOOL_RATE_MAX):
+        return {"error": S.t("err.rate", lang, n=RATE_WINDOW // 60)}, 429
+    host = (urlparse(url).hostname or "").lower()
+    # 冷却只读检查：真跑失败（工具脚本抛异常 / 软失败）不标记，域名不会被锁死 10 分钟。
+    if not _tool_cooldown_free(host):
+        with _lock:
+            stale = _tool_cache.get(cache_key)
+        if stale:
+            out = dict(stale[1])
+            out["cached"] = True
+            return out, 200
+        return {"error": S.t("err.cooldown", lang, n=DOMAIN_COOLDOWN // 60)}, 429
+    if not _sem.acquire(timeout=_sem_wait):
+        return {"error": S.t("err.busy", lang)}, 429
+    try:
+        measured = _load_tool(tool_id).run(url)
+    except Exception as e:
+        # 工具脚本抛异常按软失败如实返回（脚本是两台观察者共用部署件，不在这里改）：
+        # 不写缓存、不占冷却，用户可立即重试，也不会拿到 500 后域名被锁死。
+        measured = {"ok": False, "err": f"{type(e).__name__}: {str(e)[:120]}"}
+    finally:
+        _sem.release()
+    out = {
+        "tool": tool_id,
+        "url": url,
+        # worker 与 30 站每日跑批部署在同一台 KR 观察者机器，同出口；
+        # 本地验收可用 TOOL_VANTAGE=local-verify 覆盖。
+        "vantage": os.environ.get("TOOL_VANTAGE", "server-KR"),
+        "ok": bool(measured.get("ok")),
+        "measured": measured,
+    }
+    if out["ok"]:
+        with _lock:
+            if len(_tool_cache) > 500:
+                for k, (ts, _) in list(_tool_cache.items()):
+                    if time.time() - ts > TOOL_CACHE_TTL:
+                        del _tool_cache[k]
+            _tool_cache[cache_key] = (time.time(), out)
+        _tool_cooldown_mark(host)
+    return out, 200
+# ---------------------------------------------------------------------------
+
+
+def rate_ok(ip, cap=None):
+    limit = RATE_MAX if cap is None else cap
     now = time.time()
     with _lock:
         q = _hits.setdefault(ip, deque())
         while q and now - q[0] > RATE_WINDOW:
             q.popleft()
-        if len(q) >= RATE_MAX:
+        if len(q) >= limit:
             return False
         q.append(now)
         return True
@@ -1434,6 +1618,15 @@ class H(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}"}, 500)
             return self._json({"cached": cached, "result": res})
+
+        # M0 工具即时端点：按任意域名跑一次单站函数，返回单次实测字段（方向 2）。
+        # 与 /api/check 完全分开：缓存、配额、判定都不共用，也不写 30 站快照。
+        if u.path.startswith("/api/tool/"):
+            tool_id = u.path[len("/api/tool/"):].strip("/")
+            q = parse_qs(u.query)
+            url = (q.get("url") or [""])[0].strip()
+            payload, code = tool_run(tool_id, url, lang, self.client_ip())
+            return self._json(payload, code)
 
         if u.path == "/robots.txt":
             return self._send_plain(
